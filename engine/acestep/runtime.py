@@ -114,6 +114,7 @@ class AceStepRuntime:
             inference_steps=8,
             seed=request.seed if request.seed is not None else -1,
             guidance_scale=1.0,
+            shift=3.0,
             thinking=False,
             use_cot_metas=False,
             use_cot_caption=False,

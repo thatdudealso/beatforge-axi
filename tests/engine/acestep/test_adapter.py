@@ -437,6 +437,7 @@ def test_runtime_reports_native_random_seed(
 ) -> None:
     config = _configured(tmp_path, device="auto")
     generated = tmp_path / "native.wav"
+    captured_params: list[SimpleNamespace] = []
 
     class Handler:
         device = "mps"
@@ -459,6 +460,7 @@ def test_runtime_reports_native_random_seed(
         save_dir: str,
     ) -> SimpleNamespace:
         del save_dir
+        captured_params.append(_params)
         generated.write_bytes(b"RIFF-native-audio")
         return SimpleNamespace(
             success=True,
@@ -499,3 +501,4 @@ def test_runtime_reports_native_random_seed(
 
     assert result.metadata["seed"] == 8675309
     assert result.metadata["device"] == "mps"
+    assert captured_params[0].shift == 3.0
