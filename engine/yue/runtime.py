@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import importlib.util
 import math
@@ -124,7 +125,8 @@ class YueSubprocessRuntime:
 
     @staticmethod
     def _normalize_lyrics(prompt: str) -> str:
-        lyrics = prompt if prompt.lstrip().startswith("[") else f"[verse]\n{prompt}"
+        stripped = prompt.lstrip()
+        lyrics = stripped if stripped.startswith("[") else f"[verse]\n{prompt}"
         if len(UPSTREAM_SECTION_PATTERN.findall(lyrics)) >= 2:
             return lyrics
         lines = lyrics.rstrip().splitlines()
@@ -157,7 +159,7 @@ class YueSubprocessRuntime:
             raise YueRuntimeError("checkpoint location was not configured")
 
         inference_dir = upstream_root / "inference"
-        job_dir = context.workspace / f".yue-{context.job_id}"
+        job_dir = self._job_dir(context)
         output_dir = job_dir / "output"
         job_dir.mkdir(parents=True, exist_ok=True)
         if output_dir.exists():
@@ -232,3 +234,8 @@ class YueSubprocessRuntime:
                 "segments": segments,
             },
         )
+
+    @staticmethod
+    def _job_dir(context: OperationContext) -> Path:
+        digest = hashlib.sha256(context.job_id.encode()).hexdigest()[:16]
+        return context.workspace / f".yue-{digest}"

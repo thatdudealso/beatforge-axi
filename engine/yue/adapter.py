@@ -307,13 +307,15 @@ class YueEngine:
             raise UnsupportedOperationError("yue only supports .mp3 output")
 
     def _descriptor(self) -> EngineDescriptor:
-        diagnostics = self.configuration_diagnostics()
-        complete = not diagnostics
+        config_diagnostics = self.configuration_diagnostics()
+        configured = not config_diagnostics
+        readiness = self.readiness() if configured else None
+        ready = readiness.ready if readiness is not None else False
         licenses = {item.license for item in self.config.checkpoints if item.license is not None}
-        model_license = next(iter(licenses)) if complete and len(licenses) == 1 else None
-        checkpoint = self._checkpoint_identity() if complete else None
-        digest = self._checkpoint_manifest_digest() if complete else None
-        provenance = self.config.checkpoints[0].provenance_url if complete else None
+        model_license = next(iter(licenses)) if configured and len(licenses) == 1 else None
+        checkpoint = self._checkpoint_identity() if configured else None
+        digest = self._checkpoint_manifest_digest() if configured else None
+        provenance = self.config.checkpoints[0].provenance_url if configured else None
         return EngineDescriptor(
             name="yue",
             model=f"YuE@{PINNED_UPSTREAM_COMMIT}",
@@ -322,7 +324,7 @@ class YueEngine:
             checkpoint=checkpoint,
             checkpoint_sha256=digest,
             provenance_url=provenance,
-            ready=complete,
+            ready=ready,
             capabilities=CAPABILITIES,
         )
 

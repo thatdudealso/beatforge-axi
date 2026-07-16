@@ -19,6 +19,7 @@ from engine.models import (
     StemsRequest,
     TimeRange,
 )
+from engine.registry import EngineRegistry
 from engine.yue import (
     PINNED_UPSTREAM_COMMIT,
     CheckpointRole,
@@ -278,6 +279,25 @@ def test_descriptor_contains_verified_checkpoint_manifest(tmp_path: Path) -> Non
     assert descriptor.provenance_url is not None
 
 
+def test_descriptor_ready_includes_runtime_environment_for_activation(tmp_path: Path) -> None:
+    runtime = StubRuntime(
+        YueEnvironment(
+            missing_dependencies=("torch",),
+            cuda_available=False,
+            device_name=None,
+            vram_gb=None,
+        )
+    )
+    engine = YueEngine(configured_yue(tmp_path), runtime=runtime)
+    registry = EngineRegistry()
+    registry.register(engine)
+
+    assert engine.descriptor.ready is False
+    assert engine.descriptor.model_license is LicenseId.APACHE_2_0
+    with pytest.raises(EngineUnavailableError, match=r"^yue is configured but not ready$"):
+        registry.activate("yue")
+
+
 def test_readiness_reports_missing_optional_dependencies(tmp_path: Path) -> None:
     engine = YueEngine(
         configured_yue(tmp_path),
@@ -359,7 +379,7 @@ def test_readiness_reports_insufficient_vram(tmp_path: Path) -> None:
         ("analyze", AnalyzeRequest(file=Path("input.wav")), "analyze"),
     ],
 )
-def test_unsupported_operations_are_stable_and_do_not_load_runtime(
+def test_unsupported_operations_are_stable_and_do_not_run_upstream(
     tmp_path: Path,
     method: str,
     operation_request: object,
@@ -374,7 +394,7 @@ def test_unsupported_operations_are_stable_and_do_not_load_runtime(
         match=rf"^yue does not support {operation}$",
     ):
         asyncio.run(getattr(engine, method)(operation_request, context))
-    assert runtime.probe_calls == 0
+    assert runtime.probe_calls == 1
     assert runtime.calls == []
 
 
@@ -435,7 +455,7 @@ def test_remix_calls_mocked_single_track_icl_boundary(tmp_path: Path) -> None:
         ),
     ],
 )
-def test_supported_operations_reject_non_mp3_output_before_loading_runtime(
+def test_supported_operations_reject_non_mp3_output_before_running_upstream(
     tmp_path: Path,
     method: str,
     operation_request: object,
@@ -450,7 +470,7 @@ def test_supported_operations_reject_non_mp3_output_before_loading_runtime(
             )
         )
 
-    assert runtime.probe_calls == 0
+    assert runtime.probe_calls == 1
     assert runtime.calls == []
 
 
