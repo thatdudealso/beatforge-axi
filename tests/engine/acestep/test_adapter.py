@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -13,6 +14,7 @@ from engine.acestep import (
     REQUIRED_WEIGHT_PATHS,
     AceStepConfig,
     AceStepEngine,
+    AceStepRuntime,
     RuntimeGenerateRequest,
     RuntimeGenerateResult,
     VerifiedWeight,
@@ -54,7 +56,7 @@ class FakeRuntime:
         return RuntimeGenerateResult(
             path=generated,
             duration_s=request.duration_s,
-            metadata={"seed": request.seed},
+            metadata={"device": "mps", "seed": request.seed},
         )
 
 
@@ -363,22 +365,28 @@ async def test_generation_maps_request_and_copies_mocked_upstream_artifact(tmp_p
         _context(tmp_path),
     )
 
+    staged_dir = runtime.generate_calls[0].output_dir
     assert runtime.load_calls == [config]
     assert runtime.generate_calls == [
         RuntimeGenerateRequest(
             prompt="warm modular arpeggio",
             duration_s=12,
-            output_dir=tmp_path,
+            output_dir=staged_dir,
             output_format="wav",
             seed=42,
         )
     ]
+    assert staged_dir.parent == tmp_path
+    assert staged_dir != tmp_path
+    assert not staged_dir.exists()
     assert output.read_bytes() == b"RIFF-mocked-audio"
     assert result.operation is Operation.GENERATE
     assert result.artifacts[0].path == output
     assert result.artifacts[0].media_type == "audio/wav"
     assert result.artifacts[0].duration_s == 12
     assert result.metadata["checkpoint"] == config.checkpoint
+    assert result.metadata["device"] == "mps"
+    assert result.metadata["seed"] == 42
 
 
 @pytest.mark.asyncio
@@ -422,3 +430,72 @@ async def test_generation_rejects_unknown_output_format_before_loading_runtime(
         )
 
     assert runtime.load_calls == []
+
+
+def test_runtime_reports_native_random_seed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _configured(tmp_path, device="auto")
+    generated = tmp_path / "native.wav"
+
+    class Handler:
+        device = "mps"
+
+        def initialize_service(self, **_kwargs: object) -> tuple[str, bool]:
+            return ("ready", True)
+
+    def params_factory(**kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(**kwargs)
+
+    def config_factory(**kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(**kwargs)
+
+    def generate_music(
+        _handler: Handler,
+        _llm_handler: object,
+        _params: SimpleNamespace,
+        _config: SimpleNamespace,
+        *,
+        save_dir: str,
+    ) -> SimpleNamespace:
+        del save_dir
+        generated.write_bytes(b"RIFF-native-audio")
+        return SimpleNamespace(
+            success=True,
+            error=None,
+            audios=[{"path": str(generated), "params": {"seed": 8675309}}],
+        )
+
+    handler_module = SimpleNamespace(
+        __file__=str(config.project_root / "acestep" / "handler.py"),
+        AceStepHandler=Handler,
+    )
+    inference_module = SimpleNamespace(
+        __file__=str(config.project_root / "acestep" / "inference.py"),
+        GenerationParams=params_factory,
+        GenerationConfig=config_factory,
+        generate_music=generate_music,
+    )
+
+    def import_module(name: str) -> object:
+        return {
+            "acestep.handler": handler_module,
+            "acestep.inference": inference_module,
+        }[name]
+
+    monkeypatch.setattr("engine.acestep.runtime.importlib.import_module", import_module)
+    runtime = AceStepRuntime()
+
+    runtime.load(config)
+    result = runtime.generate(
+        RuntimeGenerateRequest(
+            prompt="random pulse",
+            duration_s=10,
+            output_dir=tmp_path,
+            output_format="wav",
+            seed=None,
+        )
+    )
+
+    assert result.metadata["seed"] == 8675309
+    assert result.metadata["device"] == "mps"

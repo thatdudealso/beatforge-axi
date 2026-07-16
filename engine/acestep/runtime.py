@@ -32,6 +32,8 @@ class RuntimeBoundary(Protocol):
 
 
 class _UpstreamHandler(Protocol):
+    device: str
+
     def initialize_service(
         self,
         project_root: str,
@@ -62,6 +64,7 @@ class AceStepRuntime:
         self._params_factory: Callable[..., object] | None = None
         self._config_factory: Callable[..., object] | None = None
         self._generate_music: Callable[..., object] | None = None
+        self._device: str | None = None
 
     def load(self, config: AceStepConfig) -> None:
         handler_module = importlib.import_module("acestep.handler")
@@ -92,6 +95,7 @@ class AceStepRuntime:
         if not initialized:
             raise RuntimeError(status)
         self._handler = handler
+        self._device = handler.device
 
     def generate(self, request: RuntimeGenerateRequest) -> RuntimeGenerateResult:
         if (
@@ -138,8 +142,14 @@ class AceStepRuntime:
         path_value = native_result.audios[0].get("path")
         if not isinstance(path_value, str) or not path_value:
             raise RuntimeError("ACE-Step returned an invalid audio artifact path")
+        audio_params = native_result.audios[0].get("params")
+        seed = request.seed
+        if isinstance(audio_params, dict):
+            seed_value = cast(dict[str, object], audio_params).get("seed")
+            if isinstance(seed_value, int):
+                seed = seed_value
         return RuntimeGenerateResult(
             path=Path(path_value),
             duration_s=request.duration_s,
-            metadata={"seed": request.seed},
+            metadata={"device": self._device, "seed": seed},
         )

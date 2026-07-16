@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -76,40 +77,45 @@ class AceStepEngine:
     async def generate(
         self, request: GenerateRequest, context: OperationContext
     ) -> OperationResult:
-        del context
         output_format = request.out.suffix.removeprefix(".").lower()
         if output_format not in _OUTPUT_MEDIA_TYPES:
             suffix = request.out.suffix or "<none>"
             raise EngineUnavailableError(f"acestep unsupported output format '{suffix}'")
         async with self._operation_lock:
-            return await asyncio.to_thread(self._generate_sync, request, output_format)
+            return await asyncio.to_thread(
+                self._generate_sync, request, output_format, context.workspace
+            )
 
-    def _generate_sync(self, request: GenerateRequest, output_format: str) -> OperationResult:
+    def _generate_sync(
+        self, request: GenerateRequest, output_format: str, workspace: Path
+    ) -> OperationResult:
         self._ensure_ready()
         runtime = self._load_runtime()
         request.out.parent.mkdir(parents=True, exist_ok=True)
-        native_request = RuntimeGenerateRequest(
-            prompt=request.prompt,
-            duration_s=request.duration_s,
-            output_dir=request.out.parent,
-            output_format=output_format,
-            seed=request.seed,
-        )
-        try:
-            native_result = runtime.generate(native_request)
-        except Exception as exc:
-            raise EngineUnavailableError(
-                "acestep generation failed; inspect the local ACE-Step logs for details"
-            ) from exc
-        self._copy_artifact(native_result, request.out)
-        metadata = dict(native_result.metadata)
+        workspace.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="acestep-", dir=workspace) as stage:
+            native_request = RuntimeGenerateRequest(
+                prompt=request.prompt,
+                duration_s=request.duration_s,
+                output_dir=Path(stage),
+                output_format=output_format,
+                seed=request.seed,
+            )
+            try:
+                native_result = runtime.generate(native_request)
+            except Exception as exc:
+                raise EngineUnavailableError(
+                    "acestep generation failed; inspect the local ACE-Step logs for details"
+                ) from exc
+            self._copy_artifact(native_result, request.out)
+            metadata = dict(native_result.metadata)
         metadata.update(
             {
                 "checkpoint": self._config.checkpoint,
-                "device": self._config.device,
                 "upstream_commit": self._config.upstream_commit,
             }
         )
+        metadata.setdefault("device", self._config.device)
         return OperationResult(
             operation=Operation.GENERATE,
             artifacts=[
