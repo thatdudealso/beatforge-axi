@@ -6,6 +6,11 @@
 
 Every adapter runs the same tests for descriptors, capability gates, progress, cancellation, request immutability, result shape, and error translation. License activation is tested independently from adapter registration so an unconfigured adapter can still ship.
 
+Adapter-local tests cover configuration, readiness diagnostics, optional dependency absence,
+license and checkpoint provenance rejection, upstream error translation, and mocked generation
+through the adapter's native runtime boundary. For ACE-Step Phase 1, unsupported repaint,
+remix, stems, and analyze calls must fail before the upstream runtime is loaded.
+
 ### CLI end-to-end tests
 
 Tests spawn the installed `beatforge-axi` executable in a temporary working directory with the deterministic fake engine. They assert exit codes, stdout TOON shape, clean stderr on completion, progress on stderr while running, collision behavior, and output artifacts.
@@ -33,7 +38,10 @@ The CueLab command set will be added with its scaffold.
 
 ## Hardware suites
 
-Hardware tests are opt-in and labeled by adapter and device. Every report records the upstream commit, model checkpoint digest, device, precision, prompt, duration, wall time, peak memory, and produced artifact hash.
+Hardware tests are opt-in and labeled by adapter and device. Every report records the upstream
+commit, checkpoint identifier, immutable digest or revision, verified license and provenance URL,
+downloaded byte size when weights are fetched, device, precision, prompt, requested duration,
+wall time, peak memory when measurable, produced artifact hash, and any failure reason.
 
 - ACE-Step: MPS and CUDA
 - YuE: CUDA
