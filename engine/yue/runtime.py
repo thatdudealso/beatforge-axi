@@ -126,7 +126,7 @@ class YueSubprocessRuntime:
     @staticmethod
     def _normalize_lyrics(prompt: str) -> str:
         stripped = prompt.lstrip()
-        lyrics = stripped if stripped.startswith("[") else f"[verse]\n{prompt}"
+        lyrics = stripped if UPSTREAM_SECTION_PATTERN.match(stripped) else f"[verse]\n{stripped}"
         if len(UPSTREAM_SECTION_PATTERN.findall(lyrics)) >= 2:
             return lyrics
         lines = lyrics.rstrip().splitlines()

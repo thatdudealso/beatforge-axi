@@ -181,6 +181,31 @@ def test_generate_with_unsupported_section_prompt_adds_upstream_section(
     assert request.out.read_bytes() == b"ID3"
 
 
+def test_generate_with_single_unsupported_section_prompt_normalizes_opening_section(
+    tmp_path: Path,
+) -> None:
+    runtime = YueSubprocessRuntime()
+    request = GenerateRequest(
+        prompt="[pre-chorus]\nBuild tension",
+        duration_s=30,
+        out=tmp_path / "song.mp3",
+    )
+
+    result = asyncio.run(
+        runtime.generate(
+            configured_runtime_yue(tmp_path),
+            request,
+            OperationContext(job_id="generate-lone-dashed-section", workspace=tmp_path),
+        )
+    )
+
+    lyrics = (only_yue_work_dir(tmp_path) / "lyrics.txt").read_text(encoding="utf-8")
+    assert lyrics.startswith("[verse]\n[pre-chorus]\n")
+    assert len(re.findall(r"^\[\w+\]", lyrics, flags=re.MULTILINE)) >= 2
+    assert result.path == request.out
+    assert request.out.read_bytes() == b"ID3"
+
+
 def test_remix_with_style_prompt_reaches_upstream_with_valid_lyrics(tmp_path: Path) -> None:
     runtime = YueSubprocessRuntime()
     audio_prompt = tmp_path / "reference.wav"
