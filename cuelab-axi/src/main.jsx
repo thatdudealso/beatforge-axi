@@ -44,7 +44,8 @@ function App() {
   const [preset, setPreset] = useState("lo-fi");
   const [engine, setEngine] = useState("synth");
   const [job, setJob] = useState(null);
-  const [audioUrl, setAudioUrl] = useState(null);  // real artifact URL for <audio>
+  const [audioArtifact, setAudioArtifact] = useState(null);
+  const audioUrl = audioArtifact?.url || null;
   const deckLabel = useMemo(() => `${preset} / ${duration}s`, [preset, duration]);
   const enabled = useMemo(() => {
     const capabilities = new Set(engineCapabilities[engine] || []);
@@ -59,7 +60,7 @@ function App() {
 
   async function submit(operation, body) {
     setJob({ operation, status: "queued", route: operations[operation] });
-    setAudioUrl(null);
+    setAudioArtifact(null);
     try {
       const response = await fetch(operations[operation], {
         method: "POST",
@@ -67,12 +68,30 @@ function App() {
         body: JSON.stringify({ engine, ...body })
       });
       const payload = await response.json();
+      if (!response.ok) {
+        setJob({
+          operation,
+          status: "error",
+          route: operations[operation],
+          payload,
+          error: payload.error || `HTTP ${response.status}`
+        });
+        return;
+      }
       const jid = payload.job_id;
       setJob({ operation, status: "queued", route: operations[operation], payload, job_id: jid });
 
       // Poll for completion (real execution on server)
       if (jid) {
         pollJob(jid, operation);
+      } else {
+        setJob({
+          operation,
+          status: "error",
+          route: operations[operation],
+          payload,
+          error: "missing_job_id"
+        });
       }
     } catch (error) {
       setJob({ operation, status: "offline", route: operations[operation], payload: String(error) });
@@ -89,7 +108,7 @@ function App() {
         setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
         if (data.status === "done" && data.artifacts && data.artifacts.length > 0) {
           const first = data.artifacts[0];
-          setAudioUrl(first.url);
+          setAudioArtifact(first);
           break;
         }
         if (data.status === "error") break;
@@ -114,7 +133,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = audioUrl.endsWith(".wav") ? "beatforge.wav" : "beatforge.mp3";
+    a.download = audioArtifact?.filename || "beatforge-audio";
     document.body.appendChild(a);
     a.click();
     a.remove();

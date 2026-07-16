@@ -47,8 +47,15 @@ class JobRecord:
     artifacts: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ArtifactRecord:
+    path: Path
+    media_type: str
+    filename: str
+
+
 _JOBS: dict[str, JobRecord] = {}
-_ARTIFACTS: dict[str, Path] = {}  # artifact_token -> absolute file path
+_ARTIFACTS: dict[str, ArtifactRecord] = {}
 _WORKSPACE = Path.cwd() / ".beatforge" / "server-workspace"
 _WORKSPACE.mkdir(parents=True, exist_ok=True)
 
@@ -70,14 +77,18 @@ def _store_artifacts(job_id: str, op_result: OperationResult) -> list[dict[str, 
         src = Path(art.path)
         if not src.exists():
             continue
-        token = f"{job_id}-{idx}-{src.name}"
-        dst = _WORKSPACE / token
+        token = f"{job_id}-{idx}-{uuid4().hex}"
+        dst = _WORKSPACE / f"{token}{src.suffix.lower()}"
         dst.parent.mkdir(parents=True, exist_ok=True)
         # Copy to stable workspace location (simple and safe)
         import shutil
 
         shutil.copy2(src, dst)
-        _ARTIFACTS[token] = dst.resolve()
+        _ARTIFACTS[token] = ArtifactRecord(
+            path=dst.resolve(),
+            media_type=art.media_type or "application/octet-stream",
+            filename=src.name,
+        )
         out.append(
             {
                 "url": _artifact_url(token),
@@ -189,23 +200,21 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
 
         if self.path.startswith("/v1/artifacts/"):
             token = self.path.removeprefix("/v1/artifacts/")
-            path = _ARTIFACTS.get(token)
-            if path is None or not path.exists():
+            artifact = _ARTIFACTS.get(token)
+            if artifact is None or not artifact.path.exists():
                 self._json(HTTPStatus.NOT_FOUND, {"error": "artifact_not_found"})
                 return
             # Safe serve: only tokens we registered map to real files in our workspace
             try:
-                data = path.read_bytes()
+                data = artifact.path.read_bytes()
             except Exception:
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "read_failed"})
                 return
-            media = "audio/mpeg" if path.suffix.lower() == ".mp3" else "audio/wav"
-            if path.suffix.lower() == ".wav":
-                media = "audio/wav"
             self.send_response(HTTPStatus.OK)
-            self.send_header("content-type", media)
+            self.send_header("content-type", artifact.media_type)
             self.send_header("content-length", str(len(data)))
-            self.send_header("content-disposition", f'inline; filename="{path.name}"')
+            filename = artifact.filename.replace("\\", "_").replace('"', "_")
+            self.send_header("content-disposition", f'inline; filename="{filename}"')
             self.end_headers()
             self.wfile.write(data)
             return

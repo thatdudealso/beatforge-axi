@@ -210,12 +210,18 @@ class SynthEngine(MusicEngine):
         final_path = request.out
         target_dur = float(request.duration_s)
 
-        # MP3 path requires ffmpeg. If missing or user asked WAV, serve real WAV.
-        if final_path.suffix.lower() == ".wav" or not _has_ffmpeg():
+        suffix = final_path.suffix.lower()
+        if suffix == ".wav":
             artifacts = [
                 Artifact(path=wav_path, media_type="audio/wav", duration_s=target_dur),
             ]
         else:
+            if suffix not in _FFMPEG_CODECS:
+                raise UnsupportedOperationError(
+                    f"synth does not support {suffix or 'suffixless'} output"
+                )
+            if not _has_ffmpeg():
+                raise UnsupportedOperationError(f"FFmpeg is required for {suffix} output")
             await asyncio.to_thread(_ffmpeg_convert, wav_path, final_path, target_dur)
             artifacts = [
                 Artifact(

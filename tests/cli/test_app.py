@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from cli.app import app
+from engine.synth import adapter as synth_adapter
 
 runner = CliRunner()
 
@@ -33,6 +35,31 @@ def test_generate_writes_artifact_and_toon_summary(tmp_path: Path) -> None:
     assert "engine: synth" in result.stdout
     assert "artifacts[1]: path,media_type,duration_s" in result.stdout
     assert str(out) in result.stdout
+
+
+def test_generate_mp3_fails_when_ffmpeg_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(synth_adapter, "_has_ffmpeg", lambda: False)
+    out = tmp_path / "track.mp3"
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--prompt",
+            "dusty lo-fi beat",
+            "--duration",
+            "1",
+            "--out",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert not out.exists()
+    assert "status: error" in result.stdout
+    assert "FFmpeg is required for .mp3 output" in result.stdout
 
 
 def test_repaint_reports_unsupported_for_synth_engine(tmp_path: Path) -> None:
