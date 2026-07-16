@@ -208,10 +208,37 @@ function App() {
                 </select>
               </label>
             </div>
-            <button className="primary" disabled={!enabled.generate} onClick={() => submit("generate", { prompt, duration_s: duration, out: paths.out, preset })}>
+            <button
+              type="button"
+              className="primary generateButton"
+              disabled={!enabled.generate}
+              onClick={() => submit("generate", { prompt, duration_s: duration, out: paths.out, preset })}
+            >
               <Wand2 size={18} aria-hidden="true" />
               Generate
             </button>
+            <div className="transportBar" aria-label="Playback controls">
+              <button
+                type="button"
+                className="iconButton primary"
+                title={audioUrl ? "Play generated audio" : "Generate first"}
+                onClick={playAudio}
+                disabled={!audioUrl}
+              >
+                <Play size={18} aria-hidden="true" />
+                <span>Play take</span>
+              </button>
+              <button
+                type="button"
+                className="iconButton"
+                title={audioUrl ? "Export as audio file" : "Generate first"}
+                onClick={exportAudio}
+                disabled={!audioUrl}
+              >
+                <Download size={18} aria-hidden="true" />
+                <span>Export MP3/WAV</span>
+              </button>
+            </div>
           </section>
         </div>
       </section>
@@ -229,24 +256,6 @@ function App() {
 
       <section className="jobPanel" aria-live="polite">
         <div className="playerRow">
-          <button
-            className="iconButton primary"
-            title={audioUrl ? "Play generated audio" : "Generate first"}
-            onClick={playAudio}
-            disabled={!audioUrl}
-          >
-            <Play size={18} aria-hidden="true" />
-            <span>Play</span>
-          </button>
-          <button
-            className="iconButton"
-            title={audioUrl ? "Export as audio file" : "Generate first"}
-            onClick={exportAudio}
-            disabled={!audioUrl}
-          >
-            <Download size={18} aria-hidden="true" />
-            <span>Export MP3/WAV</span>
-          </button>
           {audioUrl && <span className="artifactHint">artifact ready: {audioUrl}</span>}
         </div>
         <pre>{JSON.stringify(job || { status: "ready" }, null, 2)}</pre>

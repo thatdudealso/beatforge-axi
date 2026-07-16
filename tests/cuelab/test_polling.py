@@ -17,3 +17,11 @@ def test_cuelab_ignores_superseded_poll_results() -> None:
     assert "activeRequestRef" in source
     assert "pollJob(jid, operation, requestId)" in source
     assert "if (activeRequestRef.current !== requestId) return;" in source
+
+
+def test_cuelab_transport_controls_are_visible_and_explicit() -> None:
+    source = Path("cuelab-axi/src/main.jsx").read_text()
+
+    assert "transportBar" in source
+    assert "generateButton" in source
+    assert 'type="button"' in source
