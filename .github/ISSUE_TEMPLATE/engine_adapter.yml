@@ -1,0 +1,46 @@
+name: Engine adapter proposal
+description: Propose a locally runnable permissively licensed model
+title: "engine: "
+labels: [engine]
+body:
+  - type: input
+    id: repository
+    attributes:
+      label: Official repository
+    validations:
+      required: true
+  - type: input
+    id: code_license
+    attributes:
+      label: Code license
+      placeholder: MIT or Apache-2.0
+    validations:
+      required: true
+  - type: input
+    id: weight_license
+    attributes:
+      label: Model weight license
+      placeholder: MIT or Apache-2.0
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Weight provenance
+      description: Link the official model card and identify inherited checkpoints.
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Capabilities and hardware
+      description: Cover generate, repaint, remix, stems, analyze, device support, memory, and expected speed.
+    validations:
+      required: true
+  - type: checkboxes
+    id: policy
+    attributes:
+      label: Policy confirmation
+      options:
+        - label: This engine and its weights are locally runnable and use no proprietary service.
+          required: true

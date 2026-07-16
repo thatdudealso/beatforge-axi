@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en" data-theme="luxury">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BeatForge + CueLab - Phase 0 Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --signal: #ff5a45;
+      --ready: #7de2bd;
+      --ink: #f7f3e8;
+      --muted: #aba69c;
+      --panel: #161715;
+      --line: #383a35;
+    }
+    html { background: #0d0e0d; color: var(--ink); }
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; letter-spacing: 0; }
+    code, pre, .mono { font-family: "IBM Plex Mono", monospace; letter-spacing: 0; }
+    p, li, td, th, code, .badge { overflow-wrap: anywhere; }
+    .shell { width: min(1280px, 100%); margin: 0 auto; padding: 28px 22px 80px; }
+    .mast { border-top: 5px solid var(--signal); border-bottom: 1px solid var(--line); padding: 34px 0 30px; }
+    .kicker { color: var(--signal); font: 600 12px/1.4 "IBM Plex Mono", monospace; text-transform: uppercase; }
+    h1 { max-width: 940px; margin: 12px 0 16px; padding: 2px 5px 8px 0; font-size: clamp(40px, 7vw, 86px); line-height: 1.12; font-weight: 650; letter-spacing: 0; }
+    h2 { margin: 0 0 18px; padding-bottom: 3px; font-size: clamp(25px, 3vw, 38px); line-height: 1.18; letter-spacing: 0; }
+    h3 { margin: 0 0 10px; font-size: 18px; letter-spacing: 0; }
+    .lede { max-width: 840px; color: var(--muted); font-size: 19px; line-height: 1.55; }
+    .meta-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+    .meta { min-width: 0; padding: 18px 16px 18px 0; border-right: 1px solid var(--line); }
+    .meta + .meta { padding-left: 16px; }
+    .meta:last-child { border-right: 0; }
+    .meta-label { color: var(--muted); font: 500 11px/1.4 "IBM Plex Mono", monospace; text-transform: uppercase; }
+    .meta-value { margin-top: 5px; font-size: 16px; font-weight: 600; }
+    section { padding: 50px 0; border-bottom: 1px solid var(--line); }
+    .section-head { display: grid; grid-template-columns: minmax(0, .34fr) minmax(0, .66fr); gap: 28px; align-items: start; }
+    .section-intro { max-width: 720px; color: var(--muted); line-height: 1.55; }
+    .grid-2, .grid-3 { display: grid; gap: 14px; margin-top: 24px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .module { min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 20px; background: var(--panel); }
+    .module strong { color: var(--ready); }
+    .module p, .module li { color: #c7c3ba; line-height: 1.5; }
+    .module ul { margin: 12px 0 0; padding-left: 18px; }
+    .num { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; margin-bottom: 22px; border: 1px solid var(--signal); border-radius: 50%; color: var(--signal); font: 600 12px/1 "IBM Plex Mono", monospace; }
+    .architecture { margin-top: 26px; padding: 20px; border: 1px solid var(--line); border-radius: 6px; background: #f7f3e8; color: #181916; overflow-x: auto; }
+    .table-wrap { margin-top: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { width: 100%; min-width: 820px; border-collapse: collapse; background: var(--panel); }
+    th { color: var(--muted); font: 500 11px/1.4 "IBM Plex Mono", monospace; text-align: left; text-transform: uppercase; }
+    th, td { padding: 15px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    td { color: #d5d1c7; line-height: 1.45; }
+    .engine-name { color: var(--ink); font-weight: 650; }
+    .status { display: inline-block; padding: 4px 7px; border: 1px solid currentColor; border-radius: 3px; font: 600 10px/1.2 "IBM Plex Mono", monospace; text-transform: uppercase; white-space: nowrap; }
+    .status.go { color: var(--ready); }
+    .status.hold { color: #e8bd69; }
+    .status.stop { color: #ff7765; }
+    pre { margin: 18px 0 0; padding: 18px; background: #080908; border: 1px solid #2c2e2a; border-radius: 5px; color: #dfddd4; font-size: 12px; line-height: 1.6; overflow-x: auto; }
+    .contract { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 14px; margin-top: 24px; }
+    .mapping { display: grid; gap: 8px; margin-top: 15px; }
+    .map-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .map-row span:first-child { color: var(--signal); font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+    .map-row span:last-child { color: #cfcbc2; }
+    .phase-list { display: grid; gap: 0; margin-top: 24px; border-top: 1px solid var(--line); }
+    .phase { display: grid; grid-template-columns: 90px minmax(0, .7fr) minmax(0, 1.3fr); gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .phase-id { color: var(--signal); font: 600 12px/1.4 "IBM Plex Mono", monospace; }
+    .phase-title { font-weight: 650; }
+    .phase-detail { color: var(--muted); line-height: 1.5; }
+    .risk { border-left: 3px solid #e8bd69; }
+    .decision { border-left: 3px solid var(--ready); }
+    .question { margin-top: 18px; border: 1px solid var(--line); border-radius: 6px; padding: 20px; background: var(--panel); }
+    .options { display: grid; gap: 10px; margin: 16px 0; }
+    .option { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; color: #d2cec5; }
+    .option input { margin-top: 4px; accent-color: var(--signal); }
+    .queue { border: 0; border-radius: 4px; padding: 11px 15px; background: var(--signal); color: #160d0b; font: 700 12px/1 "IBM Plex Mono", monospace; cursor: pointer; }
+    .queue:hover { filter: brightness(1.08); }
+    .source-list { display: grid; gap: 9px; margin-top: 18px; }
+    a { color: #9ce8cd; text-underline-offset: 3px; }
+    .footer-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    @media (max-width: 820px) {
+      .shell { padding-inline: 16px; }
+      .meta-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .meta:nth-child(2) { border-right: 0; }
+      .section-head, .grid-2, .grid-3, .contract { grid-template-columns: 1fr; }
+      .phase { grid-template-columns: 65px minmax(0, 1fr); }
+      .phase-detail { grid-column: 2; }
+    }
+    @media (max-width: 480px) {
+      .meta-strip { grid-template-columns: 1fr; }
+      .meta, .meta + .meta { padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .meta:last-child { border-bottom: 0; }
+      .map-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="mast">
+      <div class="kicker">Phase 0 / Architecture Review / 2026-07-16</div>
+      <h1>One music core. Two precise front doors.</h1>
+      <p class="lede">BeatForge is a local-first music operation layer with an AXI CLI for agents and CueLab as its human deck. The design keeps model adapters replaceable, treats long inference as durable jobs, and makes command-to-control symmetry testable.</p>
+    </header>
+
+    <div class="meta-strip" aria-label="Plan summary">
+      <div class="meta"><div class="meta-label">Architecture</div><div class="meta-value">Modular monolith</div></div>
+      <div class="meta"><div class="meta-label">Default engine</div><div class="meta-value">ACE-Step 1.5</div></div>
+      <div class="meta"><div class="meta-label">Primary license</div><div class="meta-value">MIT</div></div>
+      <div class="meta"><div class="meta-label">Machine target</div><div class="meta-value">M4 Pro / 48 GB / MPS</div></div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">01 / Decision</div><h2>System shape</h2></div>
+        <p class="section-intro">Keep deployment local and simple, but preserve hard boundaries. A Python application core owns operations, jobs, audio assets, and adapters. Typer and FastAPI are thin ports over that core. React never shells out and never imports engine knowledge.</p>
+      </div>
+      <div class="architecture">
+        <div class="mermaid">
+flowchart TD
+  Agent["Agent or shell"] --> CLI["beatforge-axi CLI\nTyper + TOON boundary"]
+  Human["CueLab React deck"] --> API["beatforge serve\nloopback HTTP + SSE"]
+  CLI --> App["Application operations\ngenerate / repaint / remix / stems / analyze"]
+  API --> App
+  App --> Jobs["Durable job coordinator\nSQLite metadata + artifact store"]
+  Jobs --> Registry["Engine registry + capability gate"]
+  Registry --> ACE["ACE-Step 1.5 adapter\ndefault"]
+  Registry --> YUE["YuE adapter\noptional vocals"]
+  Registry --> Compat["MusicGen adapter\nconfigurable checkpoint"]
+  Jobs --> Audio["Shared audio pipeline\nFFmpeg + deterministic analysis"]
+  Audio --> MP3["Normalized loop-safe MP3"]
+        </div>
+      </div>
+      <div class="grid-3">
+        <article class="module decision"><span class="num">A</span><h3>Shared operation core</h3><p>CLI and API call the same typed use cases. This prevents UI-only behavior and keeps output semantics consistent.</p></article>
+        <article class="module decision"><span class="num">B</span><h3>Local job runtime</h3><p>GPU work is serialized by default, cancelable, resumable where the engine permits, and observable through terse progress events.</p></article>
+        <article class="module decision"><span class="num">C</span><h3>Capability-driven UX</h3><p>Support is declared per loaded model, not guessed from engine name. Unsupported controls are disabled with a reason and CLI calls return a structured error.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">02 / Evidence</div><h2>Engine gate</h2></div>
+        <p class="section-intro">The initial candidate list contains a licensing conflict. Code license alone is insufficient because local generation requires model weights. The repository will enforce the stricter project rule at registration time.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Engine</th><th>License result</th><th>Native fit</th><th>Local spike</th><th>Disposition</th></tr></thead>
+          <tbody>
+            <tr><td class="engine-name">ACE-Step 1.5</td><td>Repo and official weights: MIT</td><td>Generate, cover/remix, repaint, MP3; stems on base models</td><td>MPS supported on this M4 Pro</td><td><span class="status go">Default</span></td></tr>
+            <tr><td class="engine-name">YuE</td><td>Code and weights: Apache 2.0</td><td>Full songs, vocals, reference-audio style transfer</td><td>CUDA-first; document and contract-test here, benchmark on NVIDIA</td><td><span class="status hold">Optional</span></td></tr>
+            <tr><td class="engine-name">MusicGen</td><td>Code: MIT; released weights: CC BY-NC 4.0</td><td>Generate and continuation only</td><td>Adapter and configuration ship; runtime activation requires verified permissive weight provenance</td><td><span class="status hold">Included, gated</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid-2">
+        <article class="module risk"><h3>Model-specific capabilities</h3><p>ACE-Step turbo supports the editing loop, while base models are required for stem extraction. The registry records model variant, device, precision, and exact capability flags.</p></article>
+        <article class="module risk"><h3>MusicGen stays in the project</h3><p>The adapter, configuration schema, contract tests, and documentation all ship. Activation requires an explicit checkpoint, immutable digest, provenance URL, and machine-readable license. The MIT/Apache allowlist rejects Meta's released weights without removing MusicGen support.</p><pre><code>engines:
+  musicgen:
+    enabled: false
+    checkpoint: null
+    checkpoint_sha256: null
+    provenance_url: null
+    model_license: null</code></pre></article>
+        <article class="module risk"><h3>Version volatility</h3><p>The prompt references the older ACE-Step repository and commands. Build against the official ACE-Step-1.5 repository, pin a commit, and isolate its API behind the adapter.</p></article>
+      </div>
+      <div class="grid-3">
+        <article class="module decision"><h3>Valid path 1</h3><p>Train MusicGen-compatible weights from scratch on appropriately licensed data, then publish those weights under MIT or Apache 2.0 with provenance.</p></article>
+        <article class="module decision"><h3>Valid path 2</h3><p>Configure a third-party compatible checkpoint only after its own license and every inherited base weight are verified as MIT or Apache 2.0. No such checkpoint is assumed today.</p></article>
+        <article class="module risk"><h3>Not a workaround</h3><p>User-side download, a separate optional flag, or relabeling the adapter does not change the CC BY-NC license. Those approaches would still violate the stated project policy.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">03 / Contract</div><h2>Adapter interface</h2></div>
+        <p class="section-intro">Every adapter implements the same five operations. Capability metadata is authoritative, all requests and results are engine-neutral, and engine exceptions are translated before crossing the application boundary.</p>
+      </div>
+      <div class="contract">
+        <article class="module">
+          <h3>Python protocol</h3>
+          <pre><code>class MusicEngine(Protocol):
+    def descriptor(self) -&gt; EngineDescriptor: ...
+    async def generate(self, request, context) -&gt; OperationResult: ...
+    async def repaint(self, request, context) -&gt; OperationResult: ...
+    async def remix(self, request, context) -&gt; OperationResult: ...
+    async def stems(self, request, context) -&gt; OperationResult: ...
+    async def analyze(self, request, context) -&gt; OperationResult: ...</code></pre>
+        </article>
+        <article class="module">
+          <h3>Stable contract rules</h3>
+          <div class="mapping">
+            <div class="map-row"><span>descriptor</span><span>Engine, model, license, readiness, device, and per-operation capabilities.</span></div>
+            <div class="map-row"><span>request</span><span>Validated paths, time ranges, prompt, duration, seed, format, and operation options.</span></div>
+            <div class="map-row"><span>context</span><span>Workspace, cancellation, progress sink, artifact store, and shared audio tools.</span></div>
+            <div class="map-row"><span>result</span><span>Artifacts, normalized metadata, warnings, timing, provenance, and loop facts.</span></div>
+            <div class="map-row"><span>failure</span><span>Stable code, terse message, actionable help, and no raw backend stack on stdout.</span></div>
+          </div>
+        </article>
+      </div>
+      <pre><code>capabilities:
+  generate: true
+  repaint: true
+  remix: true
+  stems: false
+  analyze: true
+help[1]: Switch to an ACE-Step base model to enable stems</code></pre>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">04 / Surface</div><h2>CLI and UI symmetry</h2></div>
+        <p class="section-intro">An operation manifest is the single source of truth for command names, required inputs, capability gates, API routes, and CueLab controls. CI fails when any row loses either front door.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Operation</th><th>AXI command</th><th>Local API</th><th>CueLab control</th></tr></thead>
+          <tbody>
+            <tr><td>Generate</td><td class="mono">generate --prompt --duration --out</td><td class="mono">POST /v1/jobs/generate</td><td>Prompt, preset, duration, Generate</td></tr>
+            <tr><td>Repaint</td><td class="mono">repaint --in --section --prompt</td><td class="mono">POST /v1/jobs/repaint</td><td>Waveform region plus prompt</td></tr>
+            <tr><td>Remix</td><td class="mono">remix --in --style</td><td class="mono">POST /v1/jobs/remix</td><td>Style and source strength</td></tr>
+            <tr><td>Stems</td><td class="mono">stems --in --out-dir</td><td class="mono">POST /v1/jobs/stems</td><td>Stem mixer and export menu</td></tr>
+            <tr><td>Analyze</td><td class="mono">analyze --file</td><td class="mono">POST /v1/jobs/analyze</td><td>BPM, key, duration, loop facts</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid-2">
+        <article class="module"><h3>AXI output</h3><p>TOON is serialized only at stdout. Default rows stay at 3 to 4 fields. <span class="mono">--fields</span> adds fields, while <span class="mono">--full</span> only expands truncated detail. Progress stays on stderr.</p><pre><code>job:
+  id: j_01J...
+  operation: generate
+  status: completed
+artifact:
+  path: track.mp3
+  duration_s: 60</code></pre></article>
+        <article class="module"><h3>Boundary behavior</h3><p><span class="mono">beatforge-axi serve</span> binds to loopback, owns the engine process, exposes job events over SSE, and serves the production CueLab bundle. The browser never runs arbitrary commands or receives filesystem access beyond explicit import/export endpoints.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">05 / Verification</div><h2>Test strategy</h2></div>
+        <p class="section-intro">Heavy models stay outside ordinary CI. Confidence comes from strict adapter contract tests, a deterministic fake engine, real subprocess and HTTP paths, and opt-in hardware suites for pinned upstream versions.</p>
+      </div>
+      <div class="grid-3">
+        <article class="module"><span class="num">1</span><h3>Contract</h3><ul><li>All adapters pass one shared suite</li><li>Capabilities gate before loading</li><li>Cancellation and progress semantics</li><li>License metadata allowlist</li></ul></article>
+        <article class="module"><span class="num">2</span><h3>End to end</h3><ul><li>Spawn the installed CLI in temp workspaces</li><li>Decode MP3 and assert exact duration</li><li>Run CueLab through the real local API</li><li>Verify every operation manifest row</li></ul></article>
+        <article class="module"><span class="num">3</span><h3>Interface quality</h3><ul><li>Playwright desktop and mobile journeys</li><li>Screenshot and pixel checks</li><li>Keyboard, contrast, reduced motion</li><li>No overlap or clipped control labels</li></ul></article>
+      </div>
+      <pre><code>CI on every pull request
+python: ruff check + ruff format --check + basedpyright + pytest
+web: eslint + tsc + vitest + production build
+e2e: fake engine + real CLI + real FastAPI + Playwright
+policy: dependency licenses + forbidden backend/dependency checks + skill drift
+live: opt-in ACE-Step MPS/CUDA and YuE CUDA workflows</code></pre>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">06 / Delivery</div><h2>Build sequence</h2></div>
+        <p class="section-intro">The sequence closes architecture and policy risks before downloading models. Application behavior is developed test-first, and each phase leaves a runnable vertical slice.</p>
+      </div>
+      <div class="phase-list">
+        <div class="phase"><div class="phase-id">PHASE 0</div><div class="phase-title">Foundation</div><div class="phase-detail">MIT scaffold, operation contracts, fake engine, CI, policy checks, docs, generated agent skill, and firstmate runtime setup.</div></div>
+        <div class="phase"><div class="phase-id">PHASE 1</div><div class="phase-title">Engine spikes</div><div class="phase-detail">Three isolated reports: ACE-Step runnable MPS spike, YuE contract/install spike with NVIDIA benchmark handoff, and a complete MusicGen adapter/config spike using no disallowed weight download.</div></div>
+        <div class="phase"><div class="phase-id">PHASE 2</div><div class="phase-title">CLI vertical slice</div><div class="phase-detail">All five commands, TOON/error semantics, jobs, MP3 pipeline, analysis, loop trimming, collision policy, and black-box E2E.</div></div>
+        <div class="phase"><div class="phase-id">PHASE 3</div><div class="phase-title">CueLab deck</div><div class="phase-detail">Easy and advanced modes, WaveSurfer regions, Web Audio stem mixer, capability gating, accessibility, and pixel-checked desktop/mobile journeys.</div></div>
+        <div class="phase"><div class="phase-id">PHASE 4</div><div class="phase-title">Onboarding</div><div class="phase-detail">Human page plus versioned machine manifest, stable README and contributing docs, demo recording, and AXI catalog preparation.</div></div>
+        <div class="phase"><div class="phase-id">PHASE 5</div><div class="phase-title">Extensions</div><div class="phase-detail">Prompt queue batch mode and documented n8n boundary, followed by a signed community preset format.</div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">07 / Decisions</div><h2>Confirm before scaffold</h2></div>
+        <p class="section-intro">The code structure is resolved. Two repository operations remain intentionally unexecuted because they affect external state or the dotfiles installation layout.</p>
+      </div>
+
+      <form class="question" data-lavish-question="firstmate-location" onsubmit="event.preventDefault(); const value = new FormData(event.currentTarget).get('firstmate-location'); if (value) window.lavish.queuePrompt('Use this operational firstmate location: ' + value, { tag: 'choice', text: 'Firstmate location: ' + value, element: event.currentTarget, queueKey: 'firstmate-location' });">
+        <h3>Where should the operational firstmate clone live?</h3>
+        <p class="footer-note">The dotfiles-managed vendor snapshot is not a runnable clone. The dotfiles design document recommends editable upstream checkouts under <span class="mono">~/src/kunchenguid</span>, while your prompt asks that installations use <span class="mono">dotfiles/dotfiles</span>.</p>
+        <div class="options">
+          <label class="option"><input type="radio" name="firstmate-location" value="~/src/kunchenguid/firstmate (recommended by dotfiles design)" checked><span><strong>~/src/kunchenguid/firstmate</strong><br><span class="footer-note">Matches the documented contribution model and stays outside the dotfiles worktree.</span></span></label>
+          <label class="option"><input type="radio" name="firstmate-location" value="dotfiles/dotfiles local runtime path"><span><strong>dotfiles/dotfiles runtime path</strong><br><span class="footer-note">Requires you to name or approve an ignored path so sync does not overwrite it.</span></span></label>
+        </div>
+        <button class="queue" type="submit">Queue location</button>
+      </form>
+
+      <form class="question" data-lavish-question="origin" onsubmit="event.preventDefault(); const value = new FormData(event.currentTarget).get('origin'); if (value) window.lavish.queuePrompt('Use this repository origin plan: ' + value, { tag: 'choice', text: 'Origin plan: ' + value, element: event.currentTarget, queueKey: 'origin' });">
+        <h3>Should Phase 0 create the public GitHub origin now?</h3>
+        <p class="footer-note">An origin lets repo-bootstrap initialize no-mistakes and gives firstmate a normal isolated-worktree workflow. Creating a public repository is an external state change, so it needs explicit confirmation.</p>
+        <div class="options">
+          <label class="option"><input type="radio" name="origin" value="Create public github.com/thatdudealso/beatforge-axi now" checked><span><strong>Create public origin now</strong><br><span class="footer-note">Use <span class="mono">github.com/thatdudealso/beatforge-axi</span>, then run repo-bootstrap.</span></span></label>
+          <label class="option"><input type="radio" name="origin" value="Keep local-only until after the scaffold"><span><strong>Keep local-only</strong><br><span class="footer-note">Scaffold locally and defer no-mistakes initialization and firstmate remote workflows.</span></span></label>
+        </div>
+        <button class="queue" type="submit">Queue origin plan</button>
+      </form>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">08 / Sources</div><h2>Verified references</h2></div>
+        <div class="source-list">
+          <a href="https://github.com/ace-step/ACE-Step-1.5">ACE-Step 1.5 official repository and current installation path</a>
+          <a href="https://github.com/multimodal-art-projection/YuE">YuE official repository, Apache license, and hardware guidance</a>
+          <a href="https://raw.githubusercontent.com/facebookresearch/audiocraft/main/model_cards/MUSICGEN_MODEL_CARD.md">MusicGen official model card and CC BY-NC weight license</a>
+          <a href="https://toonformat.dev/reference/spec.html">TOON reference specification</a>
+          <span class="footer-note">Local sources: dotfiles-managed AXI and Lavish skills, the AXI SDK output boundary, gh-axi packaging conventions, and local black-box AXI E2E examples.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs";
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const paint = document.createElement("canvas").getContext("2d");
+    function toRgba(color) {
+      paint.clearRect(0, 0, 1, 1);
+      paint.fillStyle = "#000";
+      paint.fillStyle = color;
+      paint.fillRect(0, 0, 1, 1);
+      return paint.getImageData(0, 0, 1, 1).data;
+    }
+    function compositeRgba(foreground, background) {
+      const fa = foreground[3] / 255;
+      const ba = background[3] / 255;
+      const alpha = fa + ba * (1 - fa);
+      if (alpha === 0) return [0, 0, 0, 0];
+      return [
+        (foreground[0] * fa + background[0] * ba * (1 - fa)) / alpha,
+        (foreground[1] * fa + background[1] * ba * (1 - fa)) / alpha,
+        (foreground[2] * fa + background[2] * ba * (1 - fa)) / alpha,
+        alpha * 255,
+      ];
+    }
+    function pageIsDark() {
+      const root = document.documentElement;
+      const rootBg = toRgba(getComputedStyle(root).backgroundColor);
+      const bodyBg = toRgba(getComputedStyle(document.body).backgroundColor);
+      const [r, g, b, a] = compositeRgba(bodyBg, rootBg);
+      if (a > 0) return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.5;
+      return darkQuery.matches;
+    }
+    const diagrams = [...document.querySelectorAll(".mermaid")].map((el) => ({ el, src: el.textContent }));
+    let applied;
+    async function render() {
+      const theme = pageIsDark() ? "dark" : "default";
+      if (theme === applied) return;
+      mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict" });
+      for (const { el, src } of diagrams) {
+        el.removeAttribute("data-processed");
+        el.textContent = src;
+      }
+      await mermaid.run({ nodes: diagrams.map((d) => d.el) });
+      applied = theme;
+    }
+    if (document.readyState === "complete") void render();
+    else window.addEventListener("load", () => void render(), { once: true });
+    darkQuery.addEventListener("change", () => void render());
+  </script>
+</body>
+</html>

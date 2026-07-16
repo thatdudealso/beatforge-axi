@@ -1,0 +1,42 @@
+# Testing strategy
+
+## Required layers
+
+### Contract tests
+
+Every adapter runs the same tests for descriptors, capability gates, progress, cancellation, request immutability, result shape, and error translation. License activation is tested independently from adapter registration so an unconfigured adapter can still ship.
+
+### CLI end-to-end tests
+
+Tests spawn the installed `beatforge-axi` executable in a temporary working directory with the deterministic fake engine. They assert exit codes, stdout TOON shape, clean stderr on completion, progress on stderr while running, collision behavior, and output artifacts.
+
+Unknown flags and missing required values must fail before an engine is loaded. Unsupported capabilities must return a stable error and actionable help.
+
+### Audio tests
+
+Generated fixtures pass through the real FFmpeg boundary. Tests decode the MP3, verify requested duration within one frame, inspect loop edges, and assert that output is non-silent and finite. Hardware engines are not required in ordinary CI.
+
+### API and CueLab tests
+
+The fake engine runs behind the real local HTTP server. Playwright covers easy generation, repaint selection, remix controls, stem mixing, analysis, cancellation, and export. Desktop and mobile screenshots are inspected for overlap, clipping, blank canvases, and incorrect control gating.
+
+## Test commands
+
+```sh
+uv run pytest
+uv run ruff format --check .
+uv run ruff check .
+uv run basedpyright
+```
+
+The CueLab command set will be added with its scaffold.
+
+## Hardware suites
+
+Hardware tests are opt-in and labeled by adapter and device. Every report records the upstream commit, model checkpoint digest, device, precision, prompt, duration, wall time, peak memory, and produced artifact hash.
+
+- ACE-Step: MPS and CUDA
+- YuE: CUDA
+- MusicGen: only a checkpoint that passes the model license and provenance gate
+
+Hardware failures never get hidden as ordinary CI skips. The report must state that the suite was not run and why.

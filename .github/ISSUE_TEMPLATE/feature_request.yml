@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a user-facing operation or workflow improvement
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the agent or human workflow that is currently difficult.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: symmetry
+    attributes:
+      label: Interface symmetry
+      options:
+        - label: I described the CLI equivalent.
+          required: true
+        - label: I described the CueLab equivalent.
+          required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

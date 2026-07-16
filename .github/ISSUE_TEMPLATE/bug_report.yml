@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible BeatForge or CueLab defect
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include model weights, generated copyrighted audio, credentials, or private data.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Describe what happened from the CLI or CueLab user's perspective.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest complete command or UI journey.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: engine
+    attributes:
+      label: Engine and model
+      placeholder: ACE-Step 1.5, model variant, pinned commit
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: OS, device, Python, beatforge-axi version
+    validations:
+      required: true
