@@ -26,12 +26,12 @@ a TODO.
 
 The official installation is Linux/WSL and CUDA oriented. Its pinned instructions recommend Python
 3.8 or newer, CUDA 11.8 or newer, PyTorch with CUDA, the repository
-[`requirements.txt`](https://github.com/multimodal-art-projection/YuE/blob/9f1394bae1d218fea750c1413c2d9d731c7310/requirements.txt),
+[`requirements.txt`](https://github.com/multimodal-art-projection/YuE/blob/9f1394bae1d8d218fea750c1413c2d9d731c7310/requirements.txt),
 and FlashAttention 2. Upstream calls FlashAttention 2 mandatory for reducing VRAM use. The
 requirements are not version pinned.
 
 The official inference API is the top-level
-[`inference/infer.py`](https://github.com/multimodal-art-projection/YuE/blob/9f1394bae1d218fea750c1413c2d9d731c7310/inference/infer.py)
+[`inference/infer.py`](https://github.com/multimodal-art-projection/YuE/blob/9f1394bae1d8d218fea750c1413c2d9d731c7310/inference/infer.py)
 script. It parses command-line arguments and initializes model state at module scope, so it is not
 an import-safe Python library boundary. Important arguments are `--stage1_model`,
 `--stage2_model`, `--genre_txt`, `--lyrics_txt`, `--run_n_segments`, `--output_dir`,
@@ -61,7 +61,7 @@ probing.
 ## License and provenance
 
 The pinned source repository contains the
-[Apache-2.0 license](https://github.com/multimodal-art-projection/YuE/blob/9f1394bae1d218fea750c1413c2d9d731c7310/LICENSE).
+[Apache-2.0 license](https://github.com/multimodal-art-projection/YuE/blob/9f1394bae1d8d218fea750c1413c2d9d731c7310/LICENSE).
 The official README also states that the YuE model, including its weights, is Apache-2.0. The
 official model publisher is `m-a-p`, linked directly by that README.
 

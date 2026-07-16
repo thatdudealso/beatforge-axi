@@ -25,6 +25,7 @@ OPTIONAL_DEPENDENCIES = (
     "torchaudio",
     "transformers",
 )
+UPSTREAM_SECTION_PATTERN = re.compile(r"^\[\w+\]", flags=re.MULTILINE)
 
 
 class _CudaProperties(Protocol):
@@ -124,7 +125,7 @@ class YueSubprocessRuntime:
     @staticmethod
     def _normalize_lyrics(prompt: str) -> str:
         lyrics = prompt if prompt.lstrip().startswith("[") else f"[verse]\n{prompt}"
-        if len(re.findall(r"^\[[^\]\n]+\]", lyrics, flags=re.MULTILINE)) >= 2:
+        if len(UPSTREAM_SECTION_PATTERN.findall(lyrics)) >= 2:
             return lyrics
         lines = lyrics.rstrip().splitlines()
         body = "\n".join(lines[1:]).strip() if lines else ""
@@ -159,7 +160,9 @@ class YueSubprocessRuntime:
         job_dir = context.workspace / f".yue-{context.job_id}"
         output_dir = job_dir / "output"
         job_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True)
         genre_file = job_dir / "genre.txt"
         lyrics_file = job_dir / "lyrics.txt"
         genre_file.write_text(f"{genre.strip()}\n", encoding="utf-8")

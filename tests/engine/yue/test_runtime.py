@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -42,11 +43,12 @@ parser.add_argument("--use_audio_prompt", action="store_true")
 args = parser.parse_args()
 
 lyrics = Path(args.lyrics_txt).read_text(encoding="utf-8")
-if len(re.findall(r"^\\[[^\\]]+\\]", lyrics, flags=re.MULTILINE)) < 2:
+if len(re.findall(r"^\\[\\w+\\]", lyrics, flags=re.MULTILINE)) < 2:
     raise SystemExit("single lyric section would produce no upstream output")
 output_dir = Path(args.output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
-(output_dir / "song.mp3").write_bytes(b"ID3")
+existing = len(list(output_dir.glob("*.mp3")))
+(output_dir / f"song-{existing}.mp3").write_bytes(b"ID3")
 """,
         encoding="utf-8",
     )
@@ -124,6 +126,30 @@ def test_generate_with_single_section_prompt_reaches_upstream_with_valid_lyrics(
     assert request.out.read_bytes() == b"ID3"
 
 
+def test_generate_with_unsupported_section_prompt_adds_upstream_section(
+    tmp_path: Path,
+) -> None:
+    runtime = YueSubprocessRuntime()
+    request = GenerateRequest(
+        prompt="[pre-chorus]\nBuild tension\n\n[verse]\nRelease it",
+        duration_s=30,
+        out=tmp_path / "song.mp3",
+    )
+
+    result = asyncio.run(
+        runtime.generate(
+            configured_runtime_yue(tmp_path),
+            request,
+            OperationContext(job_id="generate-dashed-section", workspace=tmp_path),
+        )
+    )
+
+    lyrics = (tmp_path / ".yue-generate-dashed-section" / "lyrics.txt").read_text(encoding="utf-8")
+    assert len(re.findall(r"^\[\w+\]", lyrics, flags=re.MULTILINE)) >= 2
+    assert result.path == request.out
+    assert request.out.read_bytes() == b"ID3"
+
+
 def test_remix_with_style_prompt_reaches_upstream_with_valid_lyrics(tmp_path: Path) -> None:
     runtime = YueSubprocessRuntime()
     audio_prompt = tmp_path / "reference.wav"
@@ -146,6 +172,21 @@ def test_remix_with_style_prompt_reaches_upstream_with_valid_lyrics(tmp_path: Pa
     assert lyrics.count("[") >= 2
     assert result.path == request.out
     assert request.out.read_bytes() == b"ID3"
+
+
+def test_runtime_clears_adapter_owned_output_dir_before_each_run(tmp_path: Path) -> None:
+    runtime = YueSubprocessRuntime()
+    config = configured_runtime_yue(tmp_path)
+    context = OperationContext(job_id="retry", workspace=tmp_path)
+    request = GenerateRequest(prompt="lyrics", duration_s=30, out=tmp_path / "song.mp3")
+
+    first = asyncio.run(runtime.generate(config, request, context))
+    second = asyncio.run(runtime.generate(config, request, context))
+
+    output_dir = tmp_path / ".yue-retry" / "output"
+    assert first.path == request.out
+    assert second.path == request.out
+    assert [path.name for path in output_dir.glob("*.mp3")] == ["song-0.mp3"]
 
 
 def test_runtime_rejects_non_mp3_output_before_spawning_upstream(tmp_path: Path) -> None:
