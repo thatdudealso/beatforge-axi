@@ -1,4 +1,4 @@
-"""Real local synthesis engine (development / lightweight fallback).
+"""Real local synthesis engine.
 
 Generates actual playable audio using numpy.
 Maps prompt text to simple musical parameters (BPM, root note, energy).
@@ -7,8 +7,9 @@ Produces a short loop of harmonic content + noise + ADSR envelope.
 Output is always real PCM. Post-processing (normalize, duration, MP3) is applied
 via the shared audio pipeline.
 
-This engine is always "ready" (pure CPU, no weights). It is the default for
-local testing until a heavy model (ACE-Step etc.) is configured and passes gates.
+This engine is always "ready" (pure CPU, no weights). It is the default
+runtime engine for local synthesis until a heavy model (ACE-Step etc.) is
+configured and passes gates.
 """
 
 from __future__ import annotations
@@ -16,8 +17,8 @@ from __future__ import annotations
 import asyncio
 import math
 import os
-import tempfile
 import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -203,14 +204,13 @@ def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) 
 
 def _temp_export_path(final_path: Path) -> Path:
     final_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         prefix=f".{final_path.stem}-",
         suffix=final_path.suffix or ".tmp",
         dir=final_path.parent,
         delete=False,
-    )
-    tmp_path = Path(tmp.name)
-    tmp.close()
+    ) as tmp:
+        tmp_path = Path(tmp.name)
     return tmp_path
 
 

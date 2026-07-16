@@ -7,7 +7,7 @@ def test_cuelab_polling_surfaces_terminal_errors() -> None:
     source = Path("cuelab-axi/src/main.jsx").read_text()
 
     assert "while (activeRequestRef.current === requestId)" in source
-    assert 'if (!r.ok)' in source
+    assert "if (!r.ok)" in source
     assert "consecutiveFailures" in source
     assert "maxFailures" in source
     assert "keep polling" not in source

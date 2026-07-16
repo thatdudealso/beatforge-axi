@@ -257,7 +257,7 @@ def test_generate_job_rejects_artifacts_outside_job_workspace(
         assert job["status"] == "error", job
         assert "job workspace" in job["error"]
         assert not list(workspace.glob("*.wav"))
-        assert server_module._ARTIFACTS == {}
+        assert server_module.__dict__["_ARTIFACTS"] == {}
     finally:
         httpd.shutdown()
         httpd.server_close()

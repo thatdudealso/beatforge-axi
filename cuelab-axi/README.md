@@ -4,8 +4,9 @@ CueLab-axi is the local human interface for BeatForge. It is a local web app
 styled as a turntable/deck and backed by the same BeatForge operations that
 agents use through `beatforge-axi`.
 
-The UI scaffold exists. This README defines the intended product surface,
-integration boundary, and contribution expectations for the deck experience.
+The UI scaffold exists and now supports real generate, play, and export flows.
+This README defines the intended product surface, integration boundary, and
+contribution expectations for the deck experience.
 
 ## Product shape
 

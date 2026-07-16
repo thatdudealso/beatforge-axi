@@ -11,7 +11,7 @@ The project is in active construction. Phase 0 established the engine contract,
 operation manifest, contribution rules, CI, and architecture. Phase 1 added
 ACE-Step 1.5, YuE, and AudioCraft MusicGen adapters behind the shared contract.
 Phase 2 adds the first CLI and loopback API surface. CueLab now has a React
-scaffold that targets that API boundary.
+deck UI that targets that API boundary and can play and export returned audio.
 
 ## What this project is
 
@@ -48,7 +48,7 @@ Implemented on `main`:
   `stems`, and `analyze`.
 - Operation manifest tying CLI commands, `/v1` routes, UI controls, and required
   capabilities together.
-- Synth runtime, artifact serving, and contract tests.
+- Synth runtime, real job execution, artifact serving, and contract tests.
 - AXI CLI command surface for generate, repaint, remix, stems, analyze, and
   serve.
 - Loopback `/v1/manifest` and `/v1/jobs/{operation}` server boundary.
@@ -161,7 +161,7 @@ tests/           Contract and smoke tests
 
 ## CueLab
 
-CueLab is the planned web UI for the same operations. It should feel like a
+CueLab is the web UI for the same operations. It should feel like a
 usable deck, not a marketing page: prompt deck, presets, waveform-on-platter,
 repaint region selection, stem mixer, loop editor, and export controls.
 
