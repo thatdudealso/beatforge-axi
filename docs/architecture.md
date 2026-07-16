@@ -57,10 +57,14 @@ Adapters return lossless or engine-native audio into a shared post-processing pi
 
 ### YuE
 
-- License: code and weights are Apache-2.0.
-- Fit: full songs with vocals and reference-audio style transfer.
-- Runtime: CUDA-first, substantially heavier and slower, with 80 GB recommended for longer songs.
-- Decision: optional vocals adapter. Contract and installation can be validated on Apple hardware, but quality and performance benchmarks require NVIDIA hardware.
+- License: pinned source is Apache-2.0; activation requires verified MIT or Apache-2.0
+  checkpoint evidence with immutable provenance and digests.
+- Fit: lyrics-to-song `generate` and single-track reference-audio `remix`, MP3 output only. No
+  repaint, arbitrary stem extraction, or deterministic analysis capability is advertised.
+- Runtime: optional isolated subprocess adapter pinned to an upstream commit. Dependencies are
+  probed lazily, CUDA is required for inference, and 80 GB VRAM is recommended for longer songs.
+- Decision: Phase 1 optional vocals adapter. Contract, license, and installation checks can be
+  validated on Apple hardware, but quality and performance benchmarks require NVIDIA hardware.
 
 ### AudioCraft MusicGen
 

@@ -9,7 +9,11 @@ Every adapter runs the same tests for descriptors, capability gates, progress, c
 Adapter-local tests cover configuration, readiness diagnostics, optional dependency absence,
 license and checkpoint provenance rejection, upstream error translation, and mocked generation
 through the adapter's native runtime boundary. For ACE-Step Phase 1, unsupported repaint,
-remix, stems, and analyze calls must fail before the upstream runtime is loaded.
+remix, stems, and analyze calls must fail before the upstream runtime is loaded. YuE Phase 1
+tests mock the upstream subprocess boundary and cover configuration gates, license and
+provenance rejection, optional dependency probing, no-CUDA readiness, capability declarations,
+stable unsupported operations, and upstream error translation without installing the CUDA-only
+stack.
 
 ### CLI end-to-end tests
 
@@ -44,7 +48,7 @@ downloaded byte size when weights are fetched, device, precision, prompt, reques
 wall time, peak memory when measurable, produced artifact hash, and any failure reason.
 
 - ACE-Step: MPS and CUDA
-- YuE: CUDA
+- YuE: CUDA with the exact configured checkpoint identities and digests
 - MusicGen: only a checkpoint that passes the model license and provenance gate
 
 Hardware failures never get hidden as ordinary CI skips. The report must state that the suite was not run and why.

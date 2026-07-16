@@ -58,6 +58,14 @@ descriptor exposes a deterministic digest of the configured evidence manifest. M
 mixed-license, or non-permissive evidence leaves the descriptor unready and fails before runtime
 probing.
 
+Adapter-local configuration is represented by `YueConfig`: `upstream_root` must point at the pinned
+YuE checkout, `upstream_commit` must match the audited commit, `checkpoints` must contain exactly
+one `stage1`, `stage1_icl`, `stage2`, and `codec` evidence record, `cuda_index` selects the NVIDIA
+device, `minimum_vram_gb` and `full_song_vram_gb` define readiness policy, and `default_genre` is
+used only for BeatForge `generate` requests. `remix` uses the request style as both style guidance
+and the lyric seed for single-track ICL. Supported calls reject non-MP3 output before probing or
+starting the upstream runtime.
+
 ## License and provenance
 
 The pinned source repository contains the

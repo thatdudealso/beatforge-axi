@@ -67,7 +67,8 @@ Not implemented yet:
 - CueLab React UI.
 
 See [docs/architecture.md](docs/architecture.md) for the accepted design and
-[docs/testing.md](docs/testing.md) for the validation strategy.
+[docs/testing.md](docs/testing.md) for the validation strategy. Phase 1 adapter
+validation records live under `docs/spikes/`.
 
 ## Architecture
 

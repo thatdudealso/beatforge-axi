@@ -37,6 +37,8 @@ CAPABILITIES = CapabilitySet(generate=True, remix=True)
 
 
 class YueEngine:
+    """MusicEngine adapter for the pinned, optional YuE subprocess runtime."""
+
     def __init__(
         self,
         config: YueConfig | None = None,
@@ -48,6 +50,8 @@ class YueEngine:
         self.descriptor = self._descriptor()
 
     def configuration_diagnostics(self) -> tuple[YueDiagnostic, ...]:
+        """Return fail-closed source and checkpoint evidence diagnostics."""
+
         diagnostics: list[YueDiagnostic] = []
         root = self.config.upstream_root
         if root is None:
@@ -177,6 +181,8 @@ class YueEngine:
         return diagnostics
 
     def readiness(self, *, required_vram_gb: float | None = None) -> YueReadiness:
+        """Validate configuration, optional dependencies, CUDA, and VRAM readiness."""
+
         diagnostics = list(self.configuration_diagnostics())
         if diagnostics:
             return YueReadiness(ready=False, diagnostics=tuple(diagnostics))
