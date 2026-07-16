@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BeatForge AXI</title>
+    <style>
+      :root {
+        color: #171717;
+        background: #f7f1e8;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+
+      header {
+        padding: 44px max(24px, calc((100vw - 1120px) / 2));
+        background: #151515;
+        color: #f7f1e8;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(42px, 7vw, 92px);
+        letter-spacing: 0;
+        line-height: 0.95;
+      }
+
+      header p {
+        max-width: 760px;
+        color: #d9d1c4;
+        font-size: 19px;
+        line-height: 1.6;
+      }
+
+      section {
+        padding: 32px max(24px, calc((100vw - 1120px) / 2));
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      article,
+      pre {
+        border: 1px solid #d0c5b6;
+        border-radius: 8px;
+        background: #fffaf2;
+        padding: 18px;
+      }
+
+      h2,
+      h3 {
+        margin-top: 0;
+      }
+
+      pre {
+        overflow: auto;
+      }
+
+      code {
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+
+      @media (max-width: 820px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>BeatForge AXI</h1>
+        <p>
+          Local-first music generation with an agent-oriented CLI and CueLab deck UI.
+          Open engines only, permissive model provenance only, MP3 export first.
+        </p>
+      </header>
+
+      <section>
+        <div class="grid">
+          <article>
+            <h3>Agents</h3>
+            <p>Use terse TOON commands for generate, repaint, remix, stems, and analysis.</p>
+          </article>
+          <article>
+            <h3>Humans</h3>
+            <p>CueLab provides the same operations as a turntable-style local web UI.</p>
+          </article>
+          <article>
+            <h3>Engines</h3>
+            <p>ACE-Step, YuE, and MusicGen sit behind one pluggable adapter contract.</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Agent Manifest</h2>
+        <pre><code>{
+  "name": "beatforge-axi",
+  "license": "MIT",
+  "local_only": true,
+  "proprietary_music_apis": false,
+  "commands": {
+    "generate": "beatforge-axi generate --prompt ... --duration ... --out track.mp3",
+    "repaint": "beatforge-axi repaint --in track.mp3 --section 0:30-0:45 --prompt ...",
+    "remix": "beatforge-axi remix --in track.mp3 --style ...",
+    "stems": "beatforge-axi stems --in track.mp3",
+    "analyze": "beatforge-axi analyze --file track.mp3",
+    "serve": "beatforge-axi serve --host 127.0.0.1 --port 8765"
+  },
+  "api": {
+    "manifest": "/v1/manifest",
+    "jobs": "/v1/jobs/{operation}"
+  }
+}</code></pre>
+      </section>
+    </main>
+  </body>
+</html>

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for Phase 0 on 2026-07-16. The visual review artifact is `.lavish/phase-0-architecture.html`.
+Accepted for Phase 0 on 2026-07-16. Updated through Phase 4 on 2026-07-16. The visual review artifact is `.lavish/phase-0-architecture.html`.
 
 ## Goals
 
@@ -14,7 +14,7 @@ Accepted for Phase 0 on 2026-07-16. The visual review artifact is `.lavish/phase
 
 ## System design
 
-BeatForge is a modular monolith. Python owns the engine contracts, operation orchestration, durable jobs, artifact metadata, audio post-processing, the Typer CLI, and a loopback FastAPI server. CueLab is a React application served by the local server in production.
+BeatForge is a modular monolith. Python owns the engine contracts, operation orchestration, durable jobs, artifact metadata, audio post-processing, the Typer CLI, and a loopback HTTP server. CueLab is a React application served by the local server in production.
 
 Both front doors call the same application operations:
 
@@ -38,7 +38,7 @@ Capabilities are declared per loaded model variant. For example, ACE-Step stem e
 
 `core/manifest.py` maps every operation to its CLI command, local API route, CueLab control, and required capability. Contract tests fail if any operation loses one of these surfaces.
 
-The local API uses versioned routes under `/v1`. Long operations return job identifiers and stream progress through server-sent events. The production server binds to loopback and only exposes explicit import and export paths.
+The local API uses versioned routes under `/v1`. The Phase 4 scaffold exposes `/v1/manifest` and accepts `/v1/jobs/{operation}` submissions. Long operations will return job identifiers and stream progress through server-sent events as the runtime matures. The production server binds to loopback and only exposes explicit import and export paths.
 
 ## Audio pipeline
 
