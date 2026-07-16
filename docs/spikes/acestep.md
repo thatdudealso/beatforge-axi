@@ -2,8 +2,7 @@
 
 ## Verified upstream boundary
 
-Research and the hardware smoke were performed on 2026-07-16 against official ACE-Step
-sources at commit
+Research was performed on 2026-07-16 against official ACE-Step sources at commit
 [`6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0`](https://github.com/ace-step/ACE-Step-1.5/commit/6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0).
 The adapter pins that full commit and rejects a different configured commit.
 
@@ -81,29 +80,13 @@ serialized per adapter instance because the runtime owns a large mutable acceler
 
 ## Apple MPS smoke generation
 
-Result: successful. A real artifact was produced through `AceStepEngine` and inspected.
+Result: not reproduced in this validation environment. No real Apple MPS generation artifact
+was produced or inspected here because the optional `acestep` package was not discoverable
+and the verified checkpoint bundle was not present. Per validation direction, this pass did
+not download ACE-Step weights or require the heavy upstream runtime.
 
-| Field | Recorded value |
-| --- | --- |
-| Machine | Apple M4 Pro, 14 CPU cores, 48 GB unified memory |
-| Upstream commit | `6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0` |
-| Checkpoint revision | `19671f406d603126926c1b7e2adc169acbcade22` |
-| Primary checkpoint digest | `3f6e0797fad420a39bd33979eb6e840e30989e34a3794e843d23b60ec6e422d7` |
-| Verified license | MIT, from the immutable official model card and revision API linked above |
-| Download size | 10,079,024,720 unique repository bytes reported by the API; 10,092,102,593 locally materialized snapshot bytes excluding cache metadata |
-| Device | PyTorch DiT on `mps`; upstream log: `DiT backend: PyTorch (mps)` |
-| Precision | DiT and text conditioning `float32`; upstream native MLX VAE decode `float32` |
-| MLX DiT | Disabled for this smoke so diffusion genuinely exercised MPS |
-| Prompt | `instrumental glassy synth arpeggio, warm bass pulse, crisp electronic drums` |
-| Seed | `20260716` |
-| Requested duration | 10 seconds |
-| Adapter `generate` wall time | 52.671 seconds, including readiness recheck, cold model load, and generation |
-| Whole-process wall time | 152.24 seconds, including initial full bundle verification |
-| Peak resident memory | 14,970,191,872 bytes from `/usr/bin/time -l`; separate MPS allocation was not available |
-| Artifact | PCM WAV, 16-bit stereo, 48,000 Hz, 1,920,044 bytes |
-| Artifact SHA-256 | `434411c0d496d248882b0be5f6309e7eda201546b3dabc5fb19b19bf5896459e` |
-
-Inspection with SoundFile and NumPy found exactly 480,000 frames, two channels, all finite
-samples, peak amplitude `0.8912353515625`, RMS `0.11297813716923631`, and 959,772 nonzero
-samples. The produced duration is exactly 10.0 seconds. The VAE decode used upstream's native
-MLX path even though DiT diffusion ran on MPS, so this report identifies both boundaries.
+The executable evidence for this pass is mocked adapter E2E coverage through `AceStepEngine`.
+That evidence verifies the adapter's public behavior: ready configuration, generate-only
+capabilities, request mapping, copied WAV output, metadata, and stable unsupported repaint
+behavior. It does not prove real ACE-Step runtime execution, real Apple MPS diffusion, model
+load behavior, wall time, memory use, or audio quality.
