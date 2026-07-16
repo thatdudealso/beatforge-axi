@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
+import tempfile
 import subprocess
 from pathlib import Path
 
@@ -199,6 +201,19 @@ def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) 
         ) from exc
 
 
+def _temp_export_path(final_path: Path) -> Path:
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(
+        prefix=f".{final_path.stem}-",
+        suffix=final_path.suffix or ".tmp",
+        dir=final_path.parent,
+        delete=False,
+    )
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    return tmp_path
+
+
 def _has_ffmpeg() -> bool:
     try:
         subprocess.run(
@@ -261,11 +276,13 @@ class SynthEngine(MusicEngine):
             audio = _synthesize(params, target_dur, rng)
             wav_path = _staging_wav_path(request.out, context)
             _write_wav(wav_path, audio)
+            export_path = _temp_export_path(final_path)
             try:
-                await asyncio.to_thread(_ffmpeg_convert, wav_path, final_path, target_dur)
+                await asyncio.to_thread(_ffmpeg_convert, wav_path, export_path, target_dur)
+                os.replace(export_path, final_path)
             except Exception:
-                if final_path.exists() and final_path != wav_path:
-                    final_path.unlink()
+                if export_path.exists():
+                    export_path.unlink()
                 if wav_path.exists():
                     wav_path.unlink()
                 raise

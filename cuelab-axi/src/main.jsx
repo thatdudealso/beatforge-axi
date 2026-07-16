@@ -104,6 +104,8 @@ function App() {
   }
 
   async function pollJob(jobId, requestId) {
+    let consecutiveFailures = 0;
+    const maxFailures = 6;
     while (activeRequestRef.current === requestId) {
       await new Promise(r => setTimeout(r, 500));
       if (activeRequestRef.current !== requestId) return;
@@ -115,6 +117,7 @@ function App() {
         }
         const data = await r.json();
         if (activeRequestRef.current !== requestId) return;
+        consecutiveFailures = 0;
         setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
         if (data.status === "done") {
           if (data.artifacts && data.artifacts.length > 0) {
@@ -127,12 +130,15 @@ function App() {
         if (data.status !== "queued" && data.status !== "running") return;
       } catch (error) {
         if (activeRequestRef.current !== requestId) return;
-        setJob(prev => ({
-          ...(prev || {}),
-          status: "error",
-          error: String(error)
-        }));
-        return;
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= maxFailures) {
+          setJob(prev => ({
+            ...(prev || {}),
+            status: "error",
+            error: String(error)
+          }));
+          return;
+        }
       }
     }
   }
