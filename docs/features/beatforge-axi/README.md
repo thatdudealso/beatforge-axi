@@ -21,7 +21,7 @@ It is not complete until real local engine execution, artifact serving, FFmpeg p
 - CLI commands exist for `generate`, `repaint`, `remix`, `stems`, `analyze`, and `serve`.
 - CLI success and error output is TOON-shaped.
 - Unknown engines, unsupported capabilities, and request validation errors return structured errors.
-- A deterministic fake engine writes placeholder artifacts for test and UI development flows.
+- The default runtime engine is a real local synthesis engine ("synth") that produces actual playable PCM audio (WAV or MP3). Heavy model adapters (ACE-Step, etc.) remain behind readiness gates.
 - The loopback API exposes `/v1/manifest` and accepts `/v1/jobs/{operation}` only after engine, capability, and request-schema validation.
 - Phase 1 adapters for ACE-Step, MusicGen, and YuE are present behind readiness and provenance gates.
 - No proprietary music service is integrated.

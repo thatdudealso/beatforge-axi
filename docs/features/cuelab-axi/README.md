@@ -53,7 +53,7 @@ CueLab is not complete until it can play real generated artifacts, render wavefo
 
 - `corepack pnpm run build` passed before merge.
 - Browser smoke with `chrome-devtools-axi` verified load, responsive layout, capability gating, and Generate job submission.
-- API smoke verified `/v1/jobs/generate` accepts a complete fake-engine payload.
+- API smoke verified `/v1/jobs/generate` accepts a payload and the real synth engine returns playable artifact URLs.
 
 ## Changelog
 

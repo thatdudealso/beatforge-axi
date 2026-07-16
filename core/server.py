@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import json
+import threading
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
 from pydantic import ValidationError
 
-from core.engines import engine_descriptors
+from core.engines import engine_descriptors, runtime_registry
 from core.manifest import OPERATION_MANIFEST
 from engine.models import (
     AnalyzeRequest,
     GenerateRequest,
     Operation,
+    OperationContext,
+    OperationResult,
     RemixRequest,
     RepaintRequest,
     StemsRequest,
@@ -26,6 +31,109 @@ REQUEST_MODELS = {
     Operation.STEMS.value: StemsRequest,
     Operation.ANALYZE.value: AnalyzeRequest,
 }
+
+# --- Real job runtime (no fake) ---
+
+
+@dataclass
+class JobRecord:
+    job_id: str
+    operation: str
+    status: str  # queued | running | done | error
+    engine: str
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+
+
+_JOBS: dict[str, JobRecord] = {}
+_ARTIFACTS: dict[str, Path] = {}  # artifact_token -> absolute file path
+_WORKSPACE = Path.cwd() / ".beatforge" / "server-workspace"
+_WORKSPACE.mkdir(parents=True, exist_ok=True)
+
+_REGISTRY = runtime_registry()
+
+
+def _artifact_url(token: str) -> str:
+    return f"/v1/artifacts/{token}"
+
+
+def _store_artifacts(job_id: str, op_result: OperationResult) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for idx, art in enumerate(op_result.artifacts):
+        src = Path(art.path)
+        if not src.exists():
+            continue
+        token = f"{job_id}-{idx}-{src.name}"
+        dst = _WORKSPACE / token
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        # Copy to stable workspace location (simple and safe)
+        import shutil
+
+        shutil.copy2(src, dst)
+        _ARTIFACTS[token] = dst.resolve()
+        out.append(
+            {
+                "url": _artifact_url(token),
+                "media_type": art.media_type or "application/octet-stream",
+                "duration_s": art.duration_s,
+                "filename": src.name,
+            }
+        )
+    return out
+
+
+def _execute_job(job: JobRecord, body: dict[str, Any]) -> None:
+    job.status = "running"
+    try:
+        op = Operation(job.operation)
+        engine_name = job.engine
+        # Build the typed request (drop engine from payload)
+        req_dict = {k: v for k, v in body.items() if k != "engine"}
+        model = REQUEST_MODELS[job.operation]
+        request = model.model_validate(req_dict)
+
+        # Ensure output path lands inside workspace for the job
+        if isinstance(request, GenerateRequest):
+            opath = Path(request.out)
+            if not opath.is_absolute():
+                request.out = _WORKSPACE / job.job_id / opath.name
+        elif isinstance(request, (RepaintRequest, RemixRequest)):
+            opath = Path(request.out)  # type: ignore[attr-defined]
+            if not opath.is_absolute():
+                request.out = _WORKSPACE / job.job_id / opath.name  # type: ignore[attr-defined]
+        elif isinstance(request, StemsRequest):
+            od = Path(request.out_dir)
+            if not od.is_absolute():
+                request.out_dir = _WORKSPACE / job.job_id / "stems"
+
+        context = OperationContext(job_id=job.job_id, workspace=_WORKSPACE / job.job_id)
+        (_WORKSPACE / job.job_id).mkdir(parents=True, exist_ok=True)
+
+        # Execute via real registry + engine (synth by default)
+        engine = _REGISTRY.for_operation(engine_name, op)
+        loop = __import__("asyncio").get_event_loop()
+        if loop.is_running():
+            # Fallback sync path for thread
+            coro = getattr(engine, op.value)(request, context)
+            result: OperationResult = __import__("asyncio").run(coro)  # type: ignore
+        else:
+            result = loop.run_until_complete(getattr(engine, op.value)(request, context))
+
+        artifacts = _store_artifacts(job.job_id, result)
+        job.artifacts = artifacts
+        job.result = {
+            "operation": result.operation.value,
+            "status": "done",
+            "engine": engine_name,
+            "artifacts": artifacts,
+            "metadata": result.metadata,
+            "warnings": result.warnings,
+        }
+        job.status = "done"
+    except Exception as exc:  # pragma: no cover - surface real errors
+        job.status = "error"
+        job.error = str(exc)
 
 
 def manifest_payload() -> dict[str, Any]:
@@ -60,6 +168,51 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
         if self.path == "/v1/manifest":
             self._json(HTTPStatus.OK, manifest_payload())
             return
+
+        if self.path.startswith("/v1/jobs/"):
+            job_id = self.path.removeprefix("/v1/jobs/")
+            job = _JOBS.get(job_id)
+            if job is None:
+                self._json(HTTPStatus.NOT_FOUND, {"error": "job_not_found"})
+                return
+            payload: dict[str, Any] = {
+                "job_id": job.job_id,
+                "operation": job.operation,
+                "status": job.status,
+                "engine": job.engine,
+            }
+            if job.result is not None:
+                payload["result"] = job.result
+            if job.error:
+                payload["error"] = job.error
+            if job.artifacts:
+                payload["artifacts"] = job.artifacts
+            self._json(HTTPStatus.OK, payload)
+            return
+
+        if self.path.startswith("/v1/artifacts/"):
+            token = self.path.removeprefix("/v1/artifacts/")
+            path = _ARTIFACTS.get(token)
+            if path is None or not path.exists():
+                self._json(HTTPStatus.NOT_FOUND, {"error": "artifact_not_found"})
+                return
+            # Safe serve: only tokens we registered map to real files in our workspace
+            try:
+                data = path.read_bytes()
+            except Exception:
+                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "read_failed"})
+                return
+            media = "audio/mpeg" if path.suffix.lower() == ".mp3" else "audio/wav"
+            if path.suffix.lower() == ".wav":
+                media = "audio/wav"
+            self.send_response(HTTPStatus.OK)
+            self.send_header("content-type", media)
+            self.send_header("content-length", str(len(data)))
+            self.send_header("content-disposition", f'inline; filename="{path.name}"')
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
 
     def do_POST(self) -> None:
@@ -78,7 +231,7 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_json_object"})
             return
         request = cast(dict[str, Any], decoded)
-        engine_name = request.get("engine", "fake")
+        engine_name = request.get("engine", "synth")
         if not isinstance(engine_name, str):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_engine"})
             return
@@ -106,10 +259,19 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        job_id = uuid4().hex
+        job = JobRecord(job_id=job_id, operation=operation, status="queued", engine=engine_name)
+        _JOBS[job_id] = job
+
+        # Start real execution in background thread (synth produces real audio)
+        body_for_exec = request  # original decoded dict
+        t = threading.Thread(target=_execute_job, args=(job, body_for_exec), daemon=True)
+        t.start()
+
         self._json(
             HTTPStatus.ACCEPTED,
             {
-                "job_id": uuid4().hex,
+                "job_id": job_id,
                 "operation": operation,
                 "status": "queued",
                 "engine": engine_name,

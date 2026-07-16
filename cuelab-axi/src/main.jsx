@@ -23,9 +23,10 @@ const operations = {
 };
 
 const presets = ["lo-fi", "garage", "ambient", "dub", "synthwave"];
+// Only real engines here. "synth" is the always-ready local engine that produces
+// actual playable audio (WAV or MP3). Heavy models remain capability-gated.
 const engineCapabilities = {
-  fake: ["generate", "repaint", "remix", "stems", "analyze"],
-  "fake-generate-only": ["generate"],
+  synth: ["generate"],
   acestep: ["generate"],
   yue: ["generate", "remix"],
   musicgen: ["generate"]
@@ -39,10 +40,11 @@ const paths = {
 function App() {
   const [mode, setMode] = useState("easy");
   const [prompt, setPrompt] = useState("dusty lo-fi beat with warm Rhodes");
-  const [duration, setDuration] = useState(60);
+  const [duration, setDuration] = useState(8);
   const [preset, setPreset] = useState("lo-fi");
-  const [engine, setEngine] = useState("fake");
+  const [engine, setEngine] = useState("synth");
   const [job, setJob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);  // real artifact URL for <audio>
   const deckLabel = useMemo(() => `${preset} / ${duration}s`, [preset, duration]);
   const enabled = useMemo(() => {
     const capabilities = new Set(engineCapabilities[engine] || []);
@@ -57,6 +59,7 @@ function App() {
 
   async function submit(operation, body) {
     setJob({ operation, status: "queued", route: operations[operation] });
+    setAudioUrl(null);
     try {
       const response = await fetch(operations[operation], {
         method: "POST",
@@ -64,10 +67,60 @@ function App() {
         body: JSON.stringify({ engine, ...body })
       });
       const payload = await response.json();
-      setJob({ operation, status: response.ok ? "done" : "error", route: operations[operation], payload });
+      const jid = payload.job_id;
+      setJob({ operation, status: "queued", route: operations[operation], payload, job_id: jid });
+
+      // Poll for completion (real execution on server)
+      if (jid) {
+        pollJob(jid, operation);
+      }
     } catch (error) {
       setJob({ operation, status: "offline", route: operations[operation], payload: String(error) });
     }
+  }
+
+  async function pollJob(jobId, op) {
+    const maxTries = 60; // ~30s
+    for (let i = 0; i < maxTries; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        const r = await fetch(`/v1/jobs/${jobId}`);
+        const data = await r.json();
+        setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
+        if (data.status === "done" && data.artifacts && data.artifacts.length > 0) {
+          // Build absolute URL to the artifact endpoint (proxied by Vite)
+          const first = data.artifacts[0];
+          const full = first.url.startsWith("http") ? first.url : `http://127.0.0.1:8765${first.url}`;
+          setAudioUrl(full);
+          break;
+        }
+        if (data.status === "error") break;
+      } catch (_) {
+        // keep polling
+      }
+    }
+  }
+
+  function playAudio() {
+    if (!audioUrl) return;
+    const a = new Audio(audioUrl);
+    a.play().catch(() => {});
+    // keep reference simple for basic use
+    window.__bf_audio = a;
+  }
+
+  async function exportAudio() {
+    if (!audioUrl) return;
+    const resp = await fetch(audioUrl);
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = audioUrl.endsWith(".wav") ? "beatforge.wav" : "beatforge.mp3";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -101,8 +154,7 @@ function App() {
             <label>
               Engine
               <select value={engine} onChange={(event) => setEngine(event.target.value)}>
-                <option value="fake">fake</option>
-                <option value="fake-generate-only">fake-generate-only</option>
+                <option value="synth">synth (local real audio)</option>
                 <option value="acestep">acestep</option>
                 <option value="yue">yue</option>
                 <option value="musicgen">musicgen</option>
@@ -144,9 +196,27 @@ function App() {
       )}
 
       <section className="jobPanel" aria-live="polite">
-        <button className="iconButton" title="Preview">
-          <Play size={18} aria-hidden="true" />
-        </button>
+        <div className="playerRow">
+          <button
+            className="iconButton primary"
+            title={audioUrl ? "Play generated audio" : "Generate first"}
+            onClick={playAudio}
+            disabled={!audioUrl}
+          >
+            <Play size={18} aria-hidden="true" />
+            <span>Play</span>
+          </button>
+          <button
+            className="iconButton"
+            title={audioUrl ? "Export as audio file" : "Generate first"}
+            onClick={exportAudio}
+            disabled={!audioUrl}
+          >
+            <Download size={18} aria-hidden="true" />
+            <span>Export MP3/WAV</span>
+          </button>
+          {audioUrl && <span className="artifactHint">artifact ready: {audioUrl}</span>}
+        </div>
         <pre>{JSON.stringify(job || { status: "ready" }, null, 2)}</pre>
       </section>
     </main>

@@ -136,7 +136,7 @@ def _validation_error(operation: Operation, exc: ValidationError) -> tuple[int, 
 @app.callback()
 def configure(
     ctx: typer.Context,
-    engine: Annotated[str, typer.Option("--engine", help="Engine adapter to use.")] = "fake",
+    engine: Annotated[str, typer.Option("--engine", help="Engine adapter to use.")] = "synth",
 ) -> None:
     ctx.obj = {"engine": engine}
 

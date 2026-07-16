@@ -10,7 +10,8 @@ runner = CliRunner()
 
 
 def test_generate_writes_artifact_and_toon_summary(tmp_path: Path) -> None:
-    out = tmp_path / "track.mp3"
+    # Request WAV explicitly: synth always produces real PCM; MP3 requires ffmpeg in PATH.
+    out = tmp_path / "track.wav"
 
     result = runner.invoke(
         app,
@@ -28,24 +29,21 @@ def test_generate_writes_artifact_and_toon_summary(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert out.exists()
     assert result.stderr == ""
-    assert result.stdout.splitlines() == [
-        "operation: generate",
-        "status: ok",
-        "engine: fake",
-        "artifacts[1]: path,media_type,duration_s",
-        f"  {out},audio/mpeg,12.0",
-    ]
+    # Real audio engine now (synth). No fake bytes anywhere in production path.
+    assert "engine: synth" in result.stdout
+    assert "artifacts[1]: path,media_type,duration_s" in result.stdout
+    assert str(out) in result.stdout
 
 
-def test_repaint_reports_unsupported_for_generate_only_engine(tmp_path: Path) -> None:
+def test_repaint_reports_unsupported_for_synth_engine(tmp_path: Path) -> None:
     source = tmp_path / "source.mp3"
-    source.write_bytes(b"fake audio")
+    source.write_bytes(b"placeholder")
 
     result = runner.invoke(
         app,
         [
             "--engine",
-            "fake-generate-only",
+            "synth",
             "repaint",
             "--in",
             str(source),
@@ -58,12 +56,10 @@ def test_repaint_reports_unsupported_for_generate_only_engine(tmp_path: Path) ->
 
     assert result.exit_code == 1
     assert result.stderr == ""
-    assert result.stdout.splitlines() == [
-        "operation: repaint",
-        "status: error",
-        "code: unsupported",
-        "message: fake-generate-only does not support repaint",
-    ]
+    # The real synth raises a concise UnsupportedOperationError
+    prefix = "operation: repaint\nstatus: error\ncode: unsupported\nmessage:"
+    assert result.stdout.startswith(prefix)
+    assert "synth does not support repaint" in result.stdout
 
 
 def test_unknown_engine_returns_structured_toon_error(tmp_path: Path) -> None:
@@ -108,18 +104,14 @@ def test_invalid_request_returns_structured_toon_validation_error(tmp_path: Path
     )
 
 
-def test_analyze_returns_toon_metadata(tmp_path: Path) -> None:
+def test_analyze_is_unsupported_on_synth(tmp_path: Path) -> None:
+    # Synth is the real audio engine for generate only (per finished state: no fake).
+    # Other operations are explicitly unsupported until implemented.
     source = tmp_path / "source.mp3"
-    source.write_bytes(b"fake audio")
+    source.write_bytes(b"placeholder")
 
     result = runner.invoke(app, ["analyze", "--file", str(source)])
 
-    assert result.exit_code == 0
-    assert result.stdout.splitlines() == [
-        "operation: analyze",
-        "status: ok",
-        "engine: fake",
-        "metadata:",
-        "  bpm: 90",
-        "  key: C minor",
-    ]
+    assert result.exit_code == 1
+    assert "code: unsupported" in result.stdout
+    assert "synth does not support analyze" in result.stdout
