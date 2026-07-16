@@ -62,6 +62,28 @@ def test_generate_mp3_fails_when_ffmpeg_is_unavailable(
     assert "FFmpeg is required for .mp3 output" in result.stdout
 
 
+def test_generate_reports_synth_duration_limit_as_validation_error(tmp_path: Path) -> None:
+    out = tmp_path / "track.wav"
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--prompt",
+            "dusty lo-fi beat",
+            "--duration",
+            "301",
+            "--out",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert not out.exists()
+    assert "code: validation_error" in result.stdout
+    assert "duration_s must be less than or equal to 300 seconds" in result.stdout
+
+
 def test_repaint_reports_unsupported_for_synth_engine(tmp_path: Path) -> None:
     source = tmp_path / "source.mp3"
     source.write_bytes(b"placeholder")

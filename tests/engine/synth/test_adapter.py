@@ -4,8 +4,10 @@ import asyncio
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from engine.errors import EngineValidationError
 from engine.models import GenerateRequest, OperationContext
 from engine.synth import SynthEngine
 from engine.synth import adapter as synth_adapter
@@ -80,3 +82,62 @@ def test_ffmpeg_convert_uses_real_encoder_when_filtering(
         assert "-b:a" not in cmd
     else:
         assert cmd[cmd.index("-b:a") + 1] == expected_bitrate
+
+
+def test_non_wav_generation_stages_wav_inside_operation_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requested = tmp_path / "song.mp3"
+    sibling_wav = tmp_path / "song.wav"
+    sibling_wav.write_bytes(b"existing-user-audio")
+    workspace = tmp_path / "workspace"
+    converted_from: list[Path] = []
+
+    def convert(src: Path, dst: Path, target_duration: float | None = None) -> None:
+        converted_from.append(src)
+        dst.write_bytes(b"mp3")
+
+    monkeypatch.setattr("engine.synth.adapter._has_ffmpeg", lambda: True)
+    monkeypatch.setattr("engine.synth.adapter._ffmpeg_convert", convert)
+
+    asyncio.run(
+        SynthEngine().generate(
+            GenerateRequest(
+                prompt="warm lofi",
+                duration_s=0.1,
+                out=requested,
+                seed=123,
+            ),
+            OperationContext(job_id="job", workspace=workspace),
+        )
+    )
+
+    assert sibling_wav.read_bytes() == b"existing-user-audio"
+    assert converted_from == [workspace / "song.wav"]
+
+
+@pytest.mark.parametrize("duration_s", [0.0, 300.1])
+def test_synth_rejects_unsupported_duration_before_allocating_audio(
+    duration_s: float, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def synthesize(
+        params: dict[str, float], duration_s: float, rng: np.random.Generator
+    ) -> np.ndarray:
+        raise AssertionError("synthesis should not start for invalid duration")
+
+    monkeypatch.setattr("engine.synth.adapter._synthesize", synthesize)
+
+    request = GenerateRequest.model_construct(
+        prompt="warm lofi",
+        duration_s=duration_s,
+        out=tmp_path / "out.wav",
+        seed=None,
+    )
+
+    with pytest.raises(EngineValidationError, match="duration_s must be"):
+        asyncio.run(
+            SynthEngine().generate(
+                request,
+                OperationContext(job_id="duration", workspace=tmp_path / "workspace"),
+            )
+        )

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -198,6 +200,112 @@ def test_artifact_endpoint_serves_registered_media_type(
         ) as response:
             assert response.status == HTTPStatus.OK
             assert response.headers["content-type"] == "audio/flac"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def test_generate_job_rejects_synth_duration_limit_before_queueing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server_module, "_WORKSPACE", tmp_path / "server-workspace")
+    monkeypatch.setattr(server_module, "_JOBS", {})
+    monkeypatch.setattr(server_module, "_ARTIFACTS", {})
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server_module.BeatForgeHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        request = urllib.request.Request(
+            f"{base_url}/v1/jobs/generate",
+            data=json.dumps(
+                {
+                    "engine": "synth",
+                    "prompt": "warm lofi",
+                    "duration_s": 301,
+                    "out": str(tmp_path / "too-long.wav"),
+                }
+            ).encode(),
+            headers={"content-type": "application/json"},
+            method="POST",
+        )
+
+        with pytest.raises(urllib.error.HTTPError) as error_info:
+            urllib.request.urlopen(request, timeout=5)
+
+        assert error_info.value.code == HTTPStatus.BAD_REQUEST
+        payload = json.loads(error_info.value.read())
+        assert payload["error"] == "validation_error"
+        assert payload["details"] == [
+            {
+                "loc": ["duration_s"],
+                "msg": "duration_s must be less than or equal to 300 seconds",
+            }
+        ]
+        assert not (tmp_path / "too-long.wav").exists()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def test_importing_cli_does_not_create_server_workspace(tmp_path: Path) -> None:
+    script = (
+        "import cli.app; "
+        "from pathlib import Path; "
+        "print(Path('.beatforge/server-workspace').exists())"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+        ],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "False"
+
+
+def test_artifact_content_disposition_rejects_header_control_characters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "server-workspace"
+    monkeypatch.setattr(server_module, "_WORKSPACE", workspace)
+    monkeypatch.setattr(server_module, "_JOBS", {})
+    monkeypatch.setattr(server_module, "_ARTIFACTS", {})
+    monkeypatch.setattr(server_module, "_REGISTRY", _Registry("audio/wav"))
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server_module.BeatForgeHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        accepted = _post_json(
+            f"{base_url}/v1/jobs/generate",
+            {
+                "engine": "synth",
+                "prompt": "warm lofi",
+                "duration_s": 1,
+                "out": str(tmp_path / "beat\r\nx-injected: yes.wav"),
+            },
+        )
+        job = _wait_for_job(base_url, accepted["job_id"])
+
+        assert job["status"] == "done", job
+        with urllib.request.urlopen(
+            f"{base_url}{job['artifacts'][0]['url']}", timeout=5
+        ) as response:
+            assert response.status == HTTPStatus.OK
+            disposition = response.headers["content-disposition"]
+            assert "\r" not in disposition
+            assert "\n" not in disposition
+            assert "x-injected" not in response.headers
     finally:
         httpd.shutdown()
         httpd.server_close()

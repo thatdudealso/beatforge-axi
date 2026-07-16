@@ -99,8 +99,8 @@ function App() {
   }
 
   async function pollJob(jobId, op) {
-    const maxTries = 60; // ~30s
-    for (let i = 0; i < maxTries; i++) {
+    const pollAttempts = 60; // ~30s
+    for (let i = 0; i < pollAttempts; i++) {
       await new Promise(r => setTimeout(r, 500));
       try {
         const r = await fetch(`/v1/jobs/${jobId}`);
@@ -109,13 +109,20 @@ function App() {
         if (data.status === "done" && data.artifacts && data.artifacts.length > 0) {
           const first = data.artifacts[0];
           setAudioArtifact(first);
-          break;
+          return;
         }
-        if (data.status === "error") break;
+        if (data.status === "error") return;
       } catch (_) {
         // keep polling
       }
     }
+    setJob(prev => ({
+      ...(prev || {}),
+      operation: op,
+      status: "timeout",
+      error: "job_poll_timeout",
+      job_id: jobId
+    }));
   }
 
   function playAudio() {

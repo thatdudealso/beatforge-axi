@@ -22,7 +22,7 @@ import numpy as np
 import soundfile as sf  # type: ignore[import-untyped]
 
 from engine.base import MusicEngine
-from engine.errors import UnsupportedOperationError
+from engine.errors import EngineValidationError, UnsupportedOperationError
 from engine.models import (
     AnalyzeRequest,
     Artifact,
@@ -39,6 +39,7 @@ from engine.models import (
 )
 
 _SR = 44100
+_MAX_DURATION_S = 300.0
 _MEDIA_TYPES = {
     ".flac": "audio/flac",
     ".mp3": "audio/mpeg",
@@ -126,6 +127,25 @@ def _write_wav(path: Path, audio: np.ndarray) -> None:
     sf.write(str(path), audio, _SR, subtype="PCM_16")
 
 
+def _validate_duration(duration_s: float) -> float:
+    duration = float(duration_s)
+    if duration <= 0:
+        raise EngineValidationError(
+            "duration_s must be greater than 0 seconds", loc=("duration_s",)
+        )
+    if duration > _MAX_DURATION_S:
+        raise EngineValidationError(
+            f"duration_s must be less than or equal to {_MAX_DURATION_S:g} seconds",
+            loc=("duration_s",),
+        )
+    return duration
+
+
+def _staging_wav_path(request_out: Path, context: OperationContext) -> Path:
+    stem = request_out.stem or "output"
+    return context.workspace / f"{stem}.wav"
+
+
 def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) -> None:
     """Normalize loudness, trim/pad to target, export MP3 (or whatever dst suffix is)."""
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -194,21 +214,27 @@ class SynthEngine(MusicEngine):
             ),
         )
 
+    def validate_request(self, operation: Operation, request: object) -> None:
+        if operation is Operation.GENERATE and isinstance(request, GenerateRequest):
+            _validate_duration(request.duration_s)
+
     async def generate(
         self, request: GenerateRequest, context: OperationContext
     ) -> OperationResult:
+        target_dur = _validate_duration(request.duration_s)
         params = _parse_prompt(request.prompt)
         rng = np.random.default_rng(request.seed)
-        audio = _synthesize(params, request.duration_s, rng)
+        audio = _synthesize(params, target_dur, rng)
 
         # Always produce a WAV first (lossless working file) - this is real PCM audio
         wav_path = (
-            request.out.with_suffix(".wav") if request.out.suffix.lower() != ".wav" else request.out
+            _staging_wav_path(request.out, context)
+            if request.out.suffix.lower() != ".wav"
+            else request.out
         )
         _write_wav(wav_path, audio)
 
         final_path = request.out
-        target_dur = float(request.duration_s)
 
         suffix = final_path.suffix.lower()
         if suffix == ".wav":

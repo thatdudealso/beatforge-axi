@@ -3,17 +3,20 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 from uuid import uuid4
 
 from pydantic import ValidationError
 
 from core.engines import engine_descriptors, runtime_registry
 from core.manifest import OPERATION_MANIFEST
+from engine.errors import EngineValidationError
 from engine.models import (
     AnalyzeRequest,
     GenerateRequest,
@@ -57,9 +60,13 @@ class ArtifactRecord:
 _JOBS: dict[str, JobRecord] = {}
 _ARTIFACTS: dict[str, ArtifactRecord] = {}
 _WORKSPACE = Path.cwd() / ".beatforge" / "server-workspace"
-_WORKSPACE.mkdir(parents=True, exist_ok=True)
 
 _REGISTRY = runtime_registry()
+
+
+def _ensure_workspace() -> Path:
+    _WORKSPACE.mkdir(parents=True, exist_ok=True)
+    return _WORKSPACE
 
 
 def _artifact_url(token: str) -> str:
@@ -71,14 +78,37 @@ def _job_output_path(job_id: str, client_path: Path, fallback_name: str) -> Path
     return _WORKSPACE / job_id / name
 
 
+def _content_disposition(filename: str) -> str:
+    display_name = "".join(
+        "_" if ord(char) < 32 or ord(char) == 127 or char in {'"', "\\"} else char
+        for char in filename
+    )
+    fallback_name = "".join(
+        "_"
+        if ord(char) < 32 or ord(char) == 127 or ord(char) > 126 or char in {'"', "\\"}
+        else char
+        for char in display_name
+    )
+    encoded = quote(display_name, safe="")
+    return f"inline; filename=\"{fallback_name}\"; filename*=UTF-8''{encoded}"
+
+
+def _validate_engine_request(engine_name: str, operation: Operation, request: object) -> None:
+    engine = _REGISTRY.for_operation(engine_name, operation)
+    validator = getattr(engine, "validate_request", None)
+    if callable(validator):
+        cast(Callable[[Operation, object], None], validator)(operation, request)
+
+
 def _store_artifacts(job_id: str, op_result: OperationResult) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    workspace = _ensure_workspace()
     for idx, art in enumerate(op_result.artifacts):
         src = Path(art.path)
         if not src.exists():
             continue
         token = f"{job_id}-{idx}-{uuid4().hex}"
-        dst = _WORKSPACE / f"{token}{src.suffix.lower()}"
+        dst = workspace / f"{token}{src.suffix.lower()}"
         dst.parent.mkdir(parents=True, exist_ok=True)
         # Copy to stable workspace location (simple and safe)
         import shutil
@@ -110,6 +140,7 @@ def _execute_job(job: JobRecord, body: dict[str, Any]) -> None:
         model = REQUEST_MODELS[job.operation]
         request = model.model_validate(req_dict)
 
+        workspace = _ensure_workspace()
         if isinstance(request, GenerateRequest):
             request.out = _job_output_path(job.job_id, Path(request.out), "output.wav")
         elif isinstance(request, (RepaintRequest, RemixRequest)):
@@ -121,8 +152,8 @@ def _execute_job(job: JobRecord, body: dict[str, Any]) -> None:
         elif isinstance(request, StemsRequest):
             request.out_dir = _job_output_path(job.job_id, Path(request.out_dir), "stems")
 
-        context = OperationContext(job_id=job.job_id, workspace=_WORKSPACE / job.job_id)
-        (_WORKSPACE / job.job_id).mkdir(parents=True, exist_ok=True)
+        context = OperationContext(job_id=job.job_id, workspace=workspace / job.job_id)
+        context.workspace.mkdir(parents=True, exist_ok=True)
 
         # Execute via real registry + engine (synth by default)
         engine = _REGISTRY.for_operation(engine_name, op)
@@ -213,8 +244,7 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.OK)
             self.send_header("content-type", artifact.media_type)
             self.send_header("content-length", str(len(data)))
-            filename = artifact.filename.replace("\\", "_").replace('"', "_")
-            self.send_header("content-disposition", f'inline; filename="{filename}"')
+            self.send_header("content-disposition", _content_disposition(artifact.filename))
             self.end_headers()
             self.wfile.write(data)
             return
@@ -253,7 +283,7 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "unsupported_operation"})
             return
         try:
-            REQUEST_MODELS[operation].model_validate(
+            typed_request = REQUEST_MODELS[operation].model_validate(
                 {key: value for key, value in request.items() if key != "engine"}
             )
         except ValidationError as exc:
@@ -262,6 +292,17 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
                 {
                     "error": "validation_error",
                     "details": exc.errors(include_url=False),
+                },
+            )
+            return
+        try:
+            _validate_engine_request(engine_name, selected_operation, typed_request)
+        except EngineValidationError as exc:
+            self._json(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": "validation_error",
+                    "details": exc.details(),
                 },
             )
             return
@@ -297,6 +338,7 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
 
 
 def run_server(host: str, port: int) -> None:
+    _ensure_workspace()
     server = ThreadingHTTPServer((host, port), BeatForgeHandler)
     try:
         server.serve_forever()
