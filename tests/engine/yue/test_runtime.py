@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib.util
 import re
 from pathlib import Path
@@ -233,6 +234,31 @@ def test_runtime_hashes_job_id_before_creating_adapter_work_dir(tmp_path: Path) 
     assert "/" not in adapter_dir.name
     assert ".." not in adapter_dir.name
     assert not (tmp_path.parent / "outside").exists()
+
+
+def test_runtime_rejects_symlinked_adapter_work_dir_before_cleanup(tmp_path: Path) -> None:
+    runtime = YueSubprocessRuntime()
+    config = configured_runtime_yue(tmp_path)
+    job_id = "symlinked-job"
+    digest = hashlib.sha256(job_id.encode()).hexdigest()[:16]
+    outside = tmp_path.parent / "outside-yue-target"
+    outside_output = outside / "output"
+    outside_output.mkdir(parents=True)
+    sentinel = outside_output / "keep.mp3"
+    sentinel.write_bytes(b"outside")
+    (tmp_path / f".yue-{digest}").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(YueRuntimeError, match="unsafe YuE workspace path"):
+        asyncio.run(
+            runtime.generate(
+                config,
+                GenerateRequest(prompt="lyrics", duration_s=30, out=tmp_path / "song.mp3"),
+                OperationContext(job_id=job_id, workspace=tmp_path),
+            )
+        )
+
+    assert sentinel.read_bytes() == b"outside"
+    assert not (tmp_path / "song.mp3").exists()
 
 
 def test_runtime_rejects_non_mp3_output_before_spawning_upstream(tmp_path: Path) -> None:

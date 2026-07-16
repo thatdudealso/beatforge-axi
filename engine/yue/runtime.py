@@ -159,14 +159,11 @@ class YueSubprocessRuntime:
             raise YueRuntimeError("checkpoint location was not configured")
 
         inference_dir = upstream_root / "inference"
-        job_dir = self._job_dir(context)
-        output_dir = job_dir / "output"
+        job_dir, output_dir, genre_file, lyrics_file = self._adapter_paths(context)
         job_dir.mkdir(parents=True, exist_ok=True)
         if output_dir.exists():
             shutil.rmtree(output_dir)
         output_dir.mkdir(parents=True)
-        genre_file = job_dir / "genre.txt"
-        lyrics_file = job_dir / "lyrics.txt"
         genre_file.write_text(f"{genre.strip()}\n", encoding="utf-8")
         lyrics_file.write_text(f"{lyrics.rstrip()}\n", encoding="utf-8")
 
@@ -236,6 +233,22 @@ class YueSubprocessRuntime:
         )
 
     @staticmethod
-    def _job_dir(context: OperationContext) -> Path:
+    def _adapter_paths(context: OperationContext) -> tuple[Path, Path, Path, Path]:
+        workspace = context.workspace.resolve()
         digest = hashlib.sha256(context.job_id.encode()).hexdigest()[:16]
-        return context.workspace / f".yue-{digest}"
+        job_dir = workspace / f".yue-{digest}"
+        output_dir = job_dir / "output"
+        genre_file = job_dir / "genre.txt"
+        lyrics_file = job_dir / "lyrics.txt"
+        for path in (job_dir, output_dir, genre_file, lyrics_file):
+            YueSubprocessRuntime._verify_adapter_path(workspace, path)
+        return job_dir, output_dir, genre_file, lyrics_file
+
+    @staticmethod
+    def _verify_adapter_path(workspace: Path, path: Path) -> None:
+        if path.is_symlink():
+            raise YueRuntimeError("unsafe YuE workspace path")
+        try:
+            path.resolve(strict=False).relative_to(workspace)
+        except ValueError as error:
+            raise YueRuntimeError("unsafe YuE workspace path") from error
