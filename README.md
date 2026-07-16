@@ -2,16 +2,17 @@
 
 Local-first, open-source music generation for agents and humans.
 
-`beatforge-axi` is the engine and AXI-style command surface. `cuelab-axi` is
-the human turntable interface that will call the same operations through the
-local BeatForge runtime. The goal is one music system with two front doors:
-terse, scriptable commands for agents and a visual deck for people.
+`beatforge-axi` is the AXI-style command surface and local runtime. CueLab now
+lives in its own `cuelab-axi` repo and uses the same `/v1` API. The goal is one
+music system with two front doors: terse commands for agents and a visual deck
+for people.
 
-The project is in active construction. Phase 0 established the engine contract,
+The project is live and still evolving. Phase 0 established the engine contract,
 operation manifest, contribution rules, CI, and architecture. Phase 1 added
 ACE-Step 1.5, YuE, and AudioCraft MusicGen adapters behind the shared contract.
-Phase 2 adds the first CLI and loopback API surface. CueLab now has a React
-scaffold that targets that API boundary.
+Phase 2 adds the CLI and loopback API surface. CueLab now has a separate React
+deck repo that targets that API boundary and can play and export returned
+audio.
 
 ## What this project is
 
@@ -40,7 +41,7 @@ or Apache-2.0 provenance before activation.
 
 ## Current status
 
-Implemented on `main`:
+Implemented and wired together:
 
 - Python package scaffold with `uv`.
 - Engine-neutral request, result, capability, and descriptor models.
@@ -48,27 +49,31 @@ Implemented on `main`:
   `stems`, and `analyze`.
 - Operation manifest tying CLI commands, `/v1` routes, UI controls, and required
   capabilities together.
-- Fake engine and contract tests.
+- Real local synth runtime, real job execution, artifact serving, and contract
+  tests.
 - AXI CLI command surface for generate, repaint, remix, stems, analyze, and
   serve.
 - Loopback `/v1/manifest` and `/v1/jobs/{operation}` server boundary.
-- CueLab React/Vite scaffold.
+- CueLab standalone React/Vite deck with generate, play, and export controls.
 - Open-source project files, issue templates, PR template, and CI.
 
-Phase 1 adapters:
+Supported current runtime behaviors:
+
+- Generate real local audio from prompts.
+- Repaint, remix, stems, and analyze through the shared job API when the active
+  engine supports the capability.
+- Play generated audio from the standalone CueLab repo.
+- Export generated audio as MP3 or WAV.
+- Keep agent output TOON-terse by default.
+
+Engine candidates remain pluggable behind the same contract:
 
 - MusicGen adapter: generate-only, inactive until a permissively licensed local
   checkpoint is explicitly configured and verified.
-- ACE-Step 1.5 adapter: default-engine candidate with native local generation
-  and permissive MIT model provenance.
+- ACE-Step 1.5 adapter: local generation plus repaint/remix direction with
+  permissive provenance.
 - YuE adapter: optional CUDA-focused vocals and remix path with Apache-2.0
   provenance and fail-closed readiness.
-
-Not implemented yet:
-
-- FFmpeg MP3 export pipeline.
-- Real long-running job execution and SSE progress.
-- Hardware-backed inference validation on local model weights.
 
 See [docs/architecture.md](docs/architecture.md) for the accepted design and
 [docs/testing.md](docs/testing.md) for the validation strategy. Phase 1 adapter
@@ -78,7 +83,8 @@ validation records live under `docs/spikes/`.
 
 BeatForge is a modular monolith. Python owns the engine contracts, operation
 orchestration, jobs, artifact metadata, audio post-processing, CLI, and local
-loopback server. CueLab is a React app served by that local runtime.
+loopback server. CueLab is a separate React app repo served by that local
+runtime.
 
 ```text
 agent -> beatforge-axi CLI -----------+
@@ -103,12 +109,13 @@ beatforge-axi stems --in track.mp3
 beatforge-axi analyze --file track.mp3
 ```
 
-Default stdout will be TOON-formatted and terse. Progress and diagnostics belong
-on stderr. `--full` will expand metadata for humans and debugging.
+Default stdout is TOON-formatted and terse. Progress and diagnostics belong on
+stderr. `--full` expands metadata for humans and debugging.
 
-The default `fake` engine is deterministic and intended for CI, UI development,
-and agent workflow tests. Hardware engines require their documented local
-checkpoints and readiness gates.
+The default runtime engine is `synth`, a real local synthesis engine that
+produces playable PCM audio and can export WAV or MP3. The `fake` engine is
+retained only for isolated contract tests. Hardware engines require their
+documented local checkpoints and readiness gates.
 
 ## Engine policy
 
@@ -154,18 +161,19 @@ uv run pytest
 engine/          Pluggable engine contract and adapters
 cli/             AXI command entry point
 core/            Operation manifest and shared orchestration surface
-cuelab-axi/      CueLab human UI docs and future React app
 docs/            Architecture, testing strategy, and spike records
 tests/           Contract and smoke tests
 ```
 
 ## CueLab
 
-CueLab is the planned web UI for the same operations. It should feel like a
-usable deck, not a marketing page: prompt deck, presets, waveform-on-platter,
-repaint region selection, stem mixer, loop editor, and export controls.
+CueLab is the web UI for the same operations. It lives in a separate repo and
+should feel like a usable deck, not a marketing page: prompt deck, presets,
+waveform-on-platter, repaint region selection, stem mixer, loop editor, and
+export controls.
 
-See [cuelab-axi/README.md](cuelab-axi/README.md).
+See [thatdudealso/cuelab-axi](https://github.com/thatdudealso/cuelab-axi) for
+the live UI surface.
 
 ## Contributing
 

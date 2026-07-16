@@ -9,7 +9,7 @@ __pycache__/
 build/
 dist/
 node_modules/
-cuelab-axi/dist/
+cuelab-axi/
 playwright-report/
 test-results/
 *.mp3

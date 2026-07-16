@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from core.engines import runtime_registry
 from core.server import run_server
-from engine.errors import EngineUnavailableError, UnsupportedOperationError
+from engine.errors import EngineUnavailableError, EngineValidationError, UnsupportedOperationError
 from engine.models import (
     AnalyzeRequest,
     GenerateRequest,
@@ -117,6 +117,8 @@ def _run(operation: Operation, engine_name: str, request: object) -> tuple[int, 
         engine = registry.for_operation(engine_name, operation)
         context = _context()
         result = asyncio.run(getattr(engine, operation.value)(request, context))
+    except EngineValidationError as exc:
+        return 1, _toon_error(operation, "validation_error", str(exc))
     except UnsupportedOperationError as exc:
         return 1, _toon_error(operation, "unsupported", str(exc))
     except EngineUnavailableError as exc:
@@ -136,7 +138,7 @@ def _validation_error(operation: Operation, exc: ValidationError) -> tuple[int, 
 @app.callback()
 def configure(
     ctx: typer.Context,
-    engine: Annotated[str, typer.Option("--engine", help="Engine adapter to use.")] = "fake",
+    engine: Annotated[str, typer.Option("--engine", help="Engine adapter to use.")] = "synth",
 ) -> None:
     ctx.obj = {"engine": engine}
 
