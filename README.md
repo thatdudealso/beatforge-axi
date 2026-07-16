@@ -2,15 +2,17 @@
 
 Local-first, open-source music generation for agents and humans.
 
-`beatforge-axi` is the AXI-style command surface and local runtime. `cuelab-axi`
-is the turntable UI that uses the same `/v1` API. The goal is one music system
-with two front doors: terse commands for agents and a visual deck for people.
+`beatforge-axi` is the AXI-style command surface and local runtime. CueLab now
+lives in its own `cuelab-axi` repo and uses the same `/v1` API. The goal is one
+music system with two front doors: terse commands for agents and a visual deck
+for people.
 
 The project is live and still evolving. Phase 0 established the engine contract,
 operation manifest, contribution rules, CI, and architecture. Phase 1 added
 ACE-Step 1.5, YuE, and AudioCraft MusicGen adapters behind the shared contract.
-Phase 2 adds the CLI and loopback API surface. CueLab now has a React deck UI
-that targets that API boundary and can play and export returned audio.
+Phase 2 adds the CLI and loopback API surface. CueLab now has a separate React
+deck repo that targets that API boundary and can play and export returned
+audio.
 
 ## What this project is
 
@@ -52,7 +54,7 @@ Implemented and wired together:
 - AXI CLI command surface for generate, repaint, remix, stems, analyze, and
   serve.
 - Loopback `/v1/manifest` and `/v1/jobs/{operation}` server boundary.
-- CueLab React/Vite deck with generate, play, and export controls.
+- CueLab standalone React/Vite deck with generate, play, and export controls.
 - Open-source project files, issue templates, PR template, and CI.
 
 Supported current runtime behaviors:
@@ -60,7 +62,7 @@ Supported current runtime behaviors:
 - Generate real local audio from prompts.
 - Repaint, remix, stems, and analyze through the shared job API when the active
   engine supports the capability.
-- Play generated audio from CueLab.
+- Play generated audio from the standalone CueLab repo.
 - Export generated audio as MP3 or WAV.
 - Keep agent output TOON-terse by default.
 
@@ -81,7 +83,8 @@ validation records live under `docs/spikes/`.
 
 BeatForge is a modular monolith. Python owns the engine contracts, operation
 orchestration, jobs, artifact metadata, audio post-processing, CLI, and local
-loopback server. CueLab is a React app served by that local runtime.
+loopback server. CueLab is a separate React app repo served by that local
+runtime.
 
 ```text
 agent -> beatforge-axi CLI -----------+
@@ -158,18 +161,19 @@ uv run pytest
 engine/          Pluggable engine contract and adapters
 cli/             AXI command entry point
 core/            Operation manifest and shared orchestration surface
-cuelab-axi/      CueLab human UI docs and future React app
 docs/            Architecture, testing strategy, and spike records
 tests/           Contract and smoke tests
 ```
 
 ## CueLab
 
-CueLab is the web UI for the same operations. It should feel like a usable
-deck, not a marketing page: prompt deck, presets, waveform-on-platter, repaint
-region selection, stem mixer, loop editor, and export controls.
+CueLab is the web UI for the same operations. It lives in a separate repo and
+should feel like a usable deck, not a marketing page: prompt deck, presets,
+waveform-on-platter, repaint region selection, stem mixer, loop editor, and
+export controls.
 
-See [cuelab-axi/README.md](cuelab-axi/README.md) for the live UI surface.
+See [thatdudealso/cuelab-axi](https://github.com/thatdudealso/cuelab-axi) for
+the live UI surface.
 
 ## Contributing
 

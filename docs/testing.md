@@ -27,7 +27,7 @@ Generated fixtures pass through the real FFmpeg boundary. Tests decode the MP3, 
 
 ### API and CueLab tests
 
-The real synth engine (local PCM synthesis) runs behind the HTTP server. The server returns real artifact URLs at `/v1/artifacts/{token}`. CueLab polls jobs, receives playable URLs, and supports Web Audio playback + export download. Desktop and mobile manual verification plus future Playwright cover generate → play → export.
+The real synth engine (local PCM synthesis) runs behind the HTTP server. The server returns real artifact URLs at `/v1/artifacts/{token}`. CueLab in its standalone repo polls jobs, receives playable URLs, and supports Web Audio playback + export download. Desktop and mobile manual verification plus future Playwright cover generate → play → export.
 
 ## Test commands
 
@@ -38,8 +38,8 @@ uv run ruff check .
 uv run basedpyright
 ```
 
-CueLab currently has a React/Vite scaffold. Its Playwright suite will be added
-with the first browser-backed workflow.
+CueLab currently has a React/Vite deck in its own repo. Its Playwright suite
+will be added with the first browser-backed workflow.
 
 ## Hardware suites
 

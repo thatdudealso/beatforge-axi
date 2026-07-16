@@ -2,15 +2,16 @@
 
 ## Current Status
 
-Active. CueLab has a merged React/Vite deck UI scaffold that can be opened in a browser, submit complete local job payloads to BeatForge's `/v1` API, and play/export returned audio artifacts. It is not a finished music workstation yet.
+Active. CueLab is now a standalone React/Vite deck repo that can be opened in a browser, submit complete local job payloads to BeatForge's `/v1` API, and play/export returned audio artifacts. It is not a finished music workstation yet.
 
 CueLab is not complete until it can render real waveform data from returned audio, handle long-running job progress, and provide tested edit workflows against real artifacts.
 
 ## Source of Truth
 
-- CueLab README: `../../../cuelab-axi/README.md`
-- CueLab source: `../../../cuelab-axi/src/main.jsx`
-- CueLab styles: `../../../cuelab-axi/src/styles.css`
+- CueLab repo: `https://github.com/thatdudealso/cuelab-axi`
+- CueLab README: `https://github.com/thatdudealso/cuelab-axi/blob/main/README.md`
+- CueLab source: `https://github.com/thatdudealso/cuelab-axi/blob/main/src/main.jsx`
+- CueLab styles: `https://github.com/thatdudealso/cuelab-axi/blob/main/src/styles.css`
 - API boundary: `../../../core/server.py`
 - Operation manifest: `../../../core/manifest.py`
 - Architecture: `../../architecture.md`
@@ -57,4 +58,4 @@ CueLab is not complete until it can render real waveform data from returned audi
 ## Changelog
 
 - 2026-07-16: Added feature track and recorded CueLab as active but not product-complete.
-- 2026-07-16: Merged React/Vite deck scaffold and local `/v1` API integration.
+- 2026-07-16: Split CueLab into its own repo and kept the local `/v1` API integration.
