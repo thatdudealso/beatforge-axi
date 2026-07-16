@@ -25,3 +25,9 @@ def test_cuelab_export_checks_http_and_delays_url_revoke() -> None:
 
     assert "if (!resp.ok)" in source
     assert "window.setTimeout(() => URL.revokeObjectURL(url), 1000);" in source
+
+
+def test_cuelab_generate_defaults_to_real_audio_container() -> None:
+    source = Path("cuelab-axi/src/main.jsx").read_text()
+
+    assert 'out: "/tmp/beatforge-cuelab/take.wav"' in source

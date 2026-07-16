@@ -33,7 +33,7 @@ const engineCapabilities = {
 };
 const paths = {
   input_file: "/tmp/beatforge-cuelab/source.mp3",
-  out: "/tmp/beatforge-cuelab/take.mp3",
+  out: "/tmp/beatforge-cuelab/take.wav",
   out_dir: "/tmp/beatforge-cuelab/stems"
 };
 

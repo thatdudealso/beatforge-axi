@@ -48,7 +48,7 @@ Implemented on `main`:
   `stems`, and `analyze`.
 - Operation manifest tying CLI commands, `/v1` routes, UI controls, and required
   capabilities together.
-- Fake engine and contract tests.
+- Synth runtime, artifact serving, and contract tests.
 - AXI CLI command surface for generate, repaint, remix, stems, analyze, and
   serve.
 - Loopback `/v1/manifest` and `/v1/jobs/{operation}` server boundary.
@@ -66,8 +66,7 @@ Phase 1 adapters:
 
 Not implemented yet:
 
-- FFmpeg MP3 export pipeline.
-- Real long-running job execution and SSE progress.
+- SSE progress for long-running jobs.
 - Hardware-backed inference validation on local model weights.
 
 See [docs/architecture.md](docs/architecture.md) for the accepted design and
@@ -106,9 +105,10 @@ beatforge-axi analyze --file track.mp3
 Default stdout will be TOON-formatted and terse. Progress and diagnostics belong
 on stderr. `--full` will expand metadata for humans and debugging.
 
-The default `fake` engine is deterministic and intended for CI, UI development,
-and agent workflow tests. Hardware engines require their documented local
-checkpoints and readiness gates.
+The default runtime engine is `synth`, a real local synthesis engine that
+produces playable PCM audio and can export WAV or MP3. The `fake` engine is
+retained only for isolated contract tests. Hardware engines require their
+documented local checkpoints and readiness gates.
 
 ## Engine policy
 
