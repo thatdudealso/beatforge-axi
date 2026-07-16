@@ -10,6 +10,7 @@ class ReadinessCode(StrEnum):
     DIGEST_REQUIRED = "digest_required"
     LICENSE_REQUIRED = "license_required"
     PROVENANCE_REQUIRED = "provenance_required"
+    PROVENANCE_INVALID = "provenance_invalid"
     PROVENANCE_VERIFICATION_REQUIRED = "provenance_verification_required"
     LICENSE_NOT_ALLOWED = "license_not_allowed"
     OFFICIAL_CHECKPOINT_FORBIDDEN = "official_checkpoint_forbidden"

@@ -10,7 +10,9 @@ importing AudioCraft.
 
 Meta's official MusicGen weights are not eligible. The adapter does not select, download, cache,
 activate, or smoke-test them. It passes only the configured local directory to AudioCraft and
-rejects a compression package containing a `pretrained` reference before model construction.
+rejects a compression package containing a `pretrained` reference before model construction. It
+also rejects conditioner configurations that can resolve auxiliary models remotely. Text
+conditioners must be self-contained LUTs or T5 assets stored inside the checkpoint directory.
 
 ## Upstream source examined
 
@@ -73,11 +75,20 @@ directory with this shape:
 /absolute/path/to/checkpoint/
   state_dict.bin
   compression_state_dict.bin
+  aux/
+    t5-base/
+      config.json
+      ...
 ```
 
 `compression_state_dict.bin` must contain its own `xp.cfg` and `best_state`; it must not contain a
 `pretrained` reference. The language model file must contain the compatible exported `xp.cfg` and
-`best_state` expected by the pinned loaders.
+`best_state` expected by the pinned loaders. A T5 conditioner must name a relative directory such
+as `aux/t5-base`; absolute paths, missing paths, and ordinary Hugging Face identifiers are
+rejected. LUT conditioners require no auxiliary weights. Other upstream conditioner types are
+rejected because the reviewed constructors can resolve hard-coded or configured remote models.
+The checkpoint digest and provenance evidence must cover every bundled auxiliary file and its MIT
+or Apache-2.0 weights license. Symbolic links and non-regular filesystem entries are rejected.
 
 The directory digest is deterministic. Files are sorted by relative POSIX path. For each file,
 the hash stream receives the path byte length as an unsigned 8-byte big-endian integer, the path
@@ -109,21 +120,29 @@ origin, digest, and weights license. Set `provenance_verified=True` only after r
 evidence outside BeatForge. The adapter intentionally does not infer a license from the local
 filename, checkpoint identity, repository name, or checkpoint contents. It also does not fetch a
 provenance URL at runtime. The explicit verification flag is an operator attestation, not an
-automatic legal conclusion.
+automatic legal conclusion. Required string evidence is stripped for validation, and the
+provenance location must be an absolute HTTP or HTTPS URL.
 
 Readiness diagnostics are stable codes and explain missing identity, digest, license, provenance,
-verification, dependency, local files, digest mismatch, invalid checkpoint shape, and forbidden
-official checkpoints. Every gate runs before AudioCraft imports or model loading.
+invalid provenance URL, verification, dependency, local files, digest mismatch, invalid checkpoint
+shape, and forbidden official checkpoints. Availability accepts only AudioCraft version `1.4.0a2`
+installed from the reviewed Git commit recorded in PEP 610 `direct_url.json` metadata. A wheel,
+version-only installation, different commit, or missing provenance metadata fails closed. Every
+gate runs before AudioCraft imports or model loading.
 
 ## Runtime behavior
 
-For a ready checkpoint, `generate` seeds PyTorch when requested, constructs MusicGen from the
-local checkpoint directory, sets the requested duration, generates one prompt, and writes the
-requested `.wav`, `.flac`, `.mp3`, or `.ogg` file through AudioCraft. The result contains the
-artifact media type and duration plus sample rate, channels, frame count, seed, checkpoint
-identity, digest, model license, provenance URL, and verification status. Native failures are
-translated to `EngineUnavailableError` with a stable adapter message and the original exception
-retained as the cause.
+For a ready checkpoint, `generate` rechecks readiness off the event-loop thread, copies the entire
+checkpoint into a private temporary snapshot, and verifies the configured directory digest against
+that snapshot before importing AudioCraft. AudioCraft package inspection, conditioner preflight,
+and construction use only the snapshot. The runtime seeds PyTorch when requested, sets the
+requested duration, generates one prompt, and writes the requested `.wav`, `.flac`, `.mp3`, or
+`.ogg` file through AudioCraft. A process-wide lock serializes model construction, seeding,
+inference, and export because PyTorch seeding changes process-global RNG state. The result contains
+the artifact media type and duration plus sample rate, channels, frame count, seed, checkpoint
+identity, digest, model license, provenance URL, and verification status. Output setup and native
+failures are translated to `EngineUnavailableError` with a stable adapter message and the original
+exception retained as the cause.
 
 ## Validation record
 
@@ -137,8 +156,9 @@ Validated in this worktree:
   checkpoint rejection before load, deterministic digest matching, stable unsupported operations,
   native error translation, and artifact metadata.
 - The AudioCraft boundary was exercised with a complete fake matching the pinned API, including
-  local checkpoint preflight, device and seed forwarding, duration configuration, prompt
-  generation, waveform shape, and audio export.
+  exact build metadata, immutable snapshot loading, local conditioner preflight, concurrent seed
+  serialization, device and seed forwarding, duration configuration, prompt generation, waveform
+  shape, and audio export.
 - Project pytest, Ruff formatting, Ruff lint, and basedpyright checks were run in the uv-managed
   worktree environment.
 

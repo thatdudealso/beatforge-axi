@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from asyncio import to_thread
+from urllib.parse import urlsplit
 
 from engine.errors import EngineUnavailableError, UnsupportedOperationError
 from engine.models import (
@@ -43,6 +44,26 @@ def _is_official_meta_checkpoint(checkpoint_id: str) -> bool:
     return normalized in {"small", "medium", "large", "melody", "style"} or normalized.startswith(
         "facebook/musicgen"
     )
+
+
+def _is_missing_string(value: object) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _is_http_url(value: str) -> bool:
+    candidate = value.strip()
+    if any(character.isspace() or ord(character) < 32 for character in candidate):
+        return False
+    try:
+        parsed = urlsplit(candidate)
+        port = parsed.port
+        return (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname is not None
+            and (port is None or 0 <= port <= 65_535)
+        )
+    except ValueError:
+        return False
 
 
 class MusicGenEngine:
@@ -90,8 +111,20 @@ class MusicGenEngine:
         diagnostics.extend(
             ReadinessDiagnostic(code, message)
             for value, code, message in required
-            if value is None or value == ""
+            if _is_missing_string(value)
         )
+        provenance_url = self.config.provenance_url
+        if (
+            provenance_url is not None
+            and provenance_url.strip()
+            and not _is_http_url(provenance_url)
+        ):
+            diagnostics.append(
+                ReadinessDiagnostic(
+                    ReadinessCode.PROVENANCE_INVALID,
+                    "checkpoint provenance URL must be an absolute HTTP or HTTPS URL",
+                )
+            )
         if not self.config.provenance_verified:
             diagnostics.append(
                 ReadinessDiagnostic(
@@ -111,7 +144,12 @@ class MusicGenEngine:
                 )
             )
 
-        if self.config.checkpoint_id and _is_official_meta_checkpoint(self.config.checkpoint_id):
+        checkpoint_id = self.config.checkpoint_id
+        if (
+            checkpoint_id is not None
+            and checkpoint_id.strip()
+            and _is_official_meta_checkpoint(checkpoint_id)
+        ):
             diagnostics.append(
                 ReadinessDiagnostic(
                     ReadinessCode.OFFICIAL_CHECKPOINT_FORBIDDEN,
@@ -138,21 +176,38 @@ class MusicGenEngine:
                         "compression_state_dict.bin",
                     )
                 )
-            elif self.config.checkpoint_sha256:
-                if _SHA256_PATTERN.fullmatch(self.config.checkpoint_sha256) is None:
+            else:
+                configured_digest = (self.config.checkpoint_sha256 or "").strip()
+                if not configured_digest:
+                    pass
+                elif _SHA256_PATTERN.fullmatch(configured_digest) is None:
                     diagnostics.append(
                         ReadinessDiagnostic(
                             ReadinessCode.DIGEST_INVALID,
                             "checkpoint SHA-256 must be exactly 64 hexadecimal characters",
                         )
                     )
-                elif checkpoint_sha256(checkpoint) != self.config.checkpoint_sha256.casefold():
-                    diagnostics.append(
-                        ReadinessDiagnostic(
-                            ReadinessCode.DIGEST_MISMATCH,
-                            "checkpoint contents do not match the configured SHA-256 digest",
+                else:
+                    try:
+                        digest_matches = (
+                            checkpoint_sha256(checkpoint) == configured_digest.casefold()
                         )
-                    )
+                    except (OSError, ValueError):
+                        diagnostics.append(
+                            ReadinessDiagnostic(
+                                ReadinessCode.CHECKPOINT_SHAPE_INVALID,
+                                "checkpoint must contain only local regular files and directories",
+                            )
+                        )
+                    else:
+                        if not digest_matches:
+                            diagnostics.append(
+                                ReadinessDiagnostic(
+                                    ReadinessCode.DIGEST_MISMATCH,
+                                    "checkpoint contents do not match the configured "
+                                    "SHA-256 digest",
+                                )
+                            )
 
         dependency_diagnostic = self._runtime.availability_diagnostic()
         if dependency_diagnostic is not None:
@@ -173,7 +228,7 @@ class MusicGenEngine:
     async def generate(
         self, request: GenerateRequest, context: OperationContext
     ) -> OperationResult:
-        self._require_ready()
+        await to_thread(self._require_ready)
         checkpoint = self.config.checkpoint
         if checkpoint is None:
             raise EngineUnavailableError("musicgen unavailable [checkpoint_required]")
@@ -182,11 +237,15 @@ class MusicGenEngine:
             raise EngineUnavailableError(
                 "musicgen generation output must use .wav, .flac, .mp3, or .ogg"
             )
-        request.out.parent.mkdir(parents=True, exist_ok=True)
         try:
+            request.out.parent.mkdir(parents=True, exist_ok=True)
+            configured_digest = self.config.checkpoint_sha256
+            if configured_digest is None:
+                raise RuntimeError("checkpoint digest is unavailable")
             generated = await to_thread(
                 self._runtime.generate,
                 checkpoint=checkpoint,
+                checkpoint_sha256=configured_digest.strip().casefold(),
                 device=self.config.device,
                 prompt=request.prompt,
                 duration_s=request.duration_s,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
+import time
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,7 @@ from engine.musicgen import (
     MusicGenConfig,
     MusicGenEngine,
     ReadinessCode,
+    ReadinessReport,
     checkpoint_sha256,
 )
 
@@ -41,6 +44,7 @@ class StubRuntime:
         self,
         *,
         checkpoint: Path,
+        checkpoint_sha256: str,
         device: str | None,
         prompt: str,
         duration_s: float,
@@ -50,6 +54,7 @@ class StubRuntime:
         self.generate_calls.append(
             {
                 "checkpoint": checkpoint,
+                "checkpoint_sha256": checkpoint_sha256,
                 "device": device,
                 "prompt": prompt,
                 "duration_s": duration_s,
@@ -66,6 +71,7 @@ class FailingRuntime(StubRuntime):
         self,
         *,
         checkpoint: Path,
+        checkpoint_sha256: str,
         device: str | None,
         prompt: str,
         duration_s: float,
@@ -127,6 +133,16 @@ def _configured(
         provenance_url=provenance_url,
         provenance_verified=provenance_verified,
     )
+
+
+def test_checkpoint_digest_rejects_symbolic_links(tmp_path: Path) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    target = tmp_path / "outside.bin"
+    target.write_bytes(b"untracked mutable asset")
+    (checkpoint / "auxiliary.bin").symlink_to(target)
+
+    with pytest.raises(ValueError, match="symbolic links"):
+        checkpoint_sha256(checkpoint)
 
 
 @pytest.mark.parametrize("model_license", [LicenseId.MIT, LicenseId.APACHE_2_0])
@@ -195,6 +211,46 @@ async def test_safety_gate_rejects_before_runtime_load(
     assert runtime.generate_calls == []
 
 
+@pytest.mark.parametrize(
+    ("config_override", "expected_code"),
+    [
+        ({"checkpoint_id": " \t\n"}, ReadinessCode.CHECKPOINT_ID_REQUIRED),
+        ({"checkpoint_sha256": " \t\n"}, ReadinessCode.DIGEST_REQUIRED),
+        ({"provenance_url": " \t\n"}, ReadinessCode.PROVENANCE_REQUIRED),
+    ],
+)
+def test_required_checkpoint_evidence_rejects_whitespace(
+    tmp_path: Path,
+    config_override: dict[str, object],
+    expected_code: ReadinessCode,
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    config = _configured(checkpoint).model_copy(update=config_override)
+
+    report = MusicGenEngine(config, runtime=StubRuntime()).readiness()
+
+    assert expected_code in {item.code for item in report.diagnostics}
+
+
+@pytest.mark.parametrize(
+    "provenance_url",
+    [
+        "publisher evidence",
+        "models.example/checkpoint",
+        "file:///tmp/model-card",
+        "https://invalid host/model-card",
+        "https://models.example:invalid/model-card",
+    ],
+)
+def test_provenance_must_be_an_http_url(tmp_path: Path, provenance_url: str) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    config = _configured(checkpoint, provenance_url=provenance_url)
+
+    report = MusicGenEngine(config, runtime=StubRuntime()).readiness()
+
+    assert "provenance_invalid" in {item.code.value for item in report.diagnostics}
+
+
 @pytest.mark.asyncio
 async def test_generate_writes_artifact_and_returns_provenance_metadata(tmp_path: Path) -> None:
     checkpoint = _checkpoint(tmp_path)
@@ -214,6 +270,7 @@ async def test_generate_writes_artifact_and_returns_provenance_metadata(tmp_path
     assert runtime.generate_calls == [
         {
             "checkpoint": checkpoint,
+            "checkpoint_sha256": config.checkpoint_sha256,
             "device": "cuda",
             "prompt": "warm analog synth",
             "duration_s": 1.5,
@@ -249,6 +306,61 @@ async def test_upstream_generation_error_is_translated(tmp_path: Path) -> None:
         await engine.generate(_generate_request(tmp_path), _operation_context(tmp_path))
 
     assert isinstance(raised.value.__cause__, RuntimeError)
+
+
+@pytest.mark.asyncio
+async def test_output_directory_error_is_translated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    engine = MusicGenEngine(_configured(checkpoint), runtime=StubRuntime())
+    request = _generate_request(tmp_path)
+    original_mkdir = Path.mkdir
+
+    def failing_mkdir(
+        path: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if path == request.out.parent:
+            raise OSError("read-only output")
+        original_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", failing_mkdir)
+
+    with pytest.raises(EngineUnavailableError, match="musicgen generation failed") as raised:
+        await engine.generate(request, _operation_context(tmp_path))
+
+    assert isinstance(raised.value.__cause__, OSError)
+
+
+@pytest.mark.asyncio
+async def test_readiness_hashing_does_not_block_the_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    engine = MusicGenEngine(_configured(checkpoint), runtime=StubRuntime())
+    events: list[str] = []
+    original_readiness = engine.readiness
+
+    def slow_readiness() -> ReadinessReport:
+        time.sleep(0.1)
+        events.append("ready")
+        return original_readiness()
+
+    async def heartbeat() -> None:
+        await asyncio.sleep(0.01)
+        events.append("heartbeat")
+
+    monkeypatch.setattr(engine, "readiness", slow_readiness)
+
+    await asyncio.gather(
+        engine.generate(_generate_request(tmp_path), _operation_context(tmp_path)),
+        heartbeat(),
+    )
+
+    assert events.index("heartbeat") < events.index("ready")
 
 
 @pytest.mark.asyncio
