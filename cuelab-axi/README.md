@@ -4,8 +4,8 @@ CueLab-axi is the local human interface for BeatForge. It is a local web app
 styled as a turntable/deck and backed by the same BeatForge operations that
 agents use through `beatforge-axi`.
 
-The UI scaffold exists. This README defines the intended product surface,
-integration boundary, and contribution expectations for the deck experience.
+The deck is live. This README describes the current controls, the integration
+boundary, and the expected workflow for the UI.
 
 ## Product shape
 
@@ -16,7 +16,7 @@ track, prompt, deck state, and export path visible immediately.
 Primary modes:
 
 - Easy mode: prompt box, duration, preset style controls, engine selector,
-  generate button, recent takes, and export.
+  generate button, play take, and export controls.
 - Advanced mode: waveform-on-platter view, section repaint tool, remix controls,
   stem mixer, loop-point editor, analysis panel, and job history.
 
@@ -38,10 +38,12 @@ Target routes are versioned under `/v1` and mirror the operation manifest:
 | Remix style controls | `remix` | `/v1/jobs/remix` |
 | Stem mixer | `stems` | `/v1/jobs/stems` |
 | Track analysis panel | `analyze` | `/v1/jobs/analyze` |
+| Play take | `play` | local artifact URL |
+| Export take | `export` | local artifact URL |
 
-Long-running operations should create jobs and stream progress through server
-sent events. The same operation service must back the CLI and the UI so the two
-surfaces cannot drift.
+Long-running operations create jobs and are polled through the local BeatForge
+API until they reach a terminal state. The same operation service backs the CLI
+and the UI so the two surfaces cannot drift.
 
 ## Expected workflows
 
@@ -50,7 +52,7 @@ Easy generation:
 1. Choose an engine or keep the configured default.
 2. Enter a prompt and duration.
 3. Generate a take.
-4. Preview, keep, retry, or export MP3/WAV.
+4. Play the take in place or export MP3/WAV.
 
 Advanced editing:
 
@@ -93,7 +95,7 @@ CueLab changes should include:
 
 - Playwright coverage for easy generation with the real synth engine;
 - capability-gating tests for repaint, remix, stems, and analysis;
-- cancellation and progress behavior;
+- cancellation, polling, and timeout behavior;
 - export flow coverage;
 - desktop and mobile screenshots reviewed for overlap, clipping, blank canvas
   states, and text overflow.
@@ -104,7 +106,8 @@ contract tests.
 
 ## Current status
 
-CueLab has a React/Vite scaffold that targets the local BeatForge `/v1` API
-boundary. The current pass covers real generate/play/export behavior. Remaining
-work is API-client hardening, job progress streaming, Playwright coverage, and
-browser screenshot review.
+CueLab has a React/Vite deck that targets the local BeatForge `/v1` API
+boundary. The current pass covers real generate/play/export behavior, visible
+transport controls, and capability-gated advanced tools. Remaining work is
+progress streaming, broader Playwright coverage, and browser screenshot review
+for the advanced mode.
