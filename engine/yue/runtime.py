@@ -4,6 +4,7 @@ import asyncio
 import importlib
 import importlib.util
 import math
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -122,9 +123,13 @@ class YueSubprocessRuntime:
 
     @staticmethod
     def _normalize_lyrics(prompt: str) -> str:
-        if prompt.lstrip().startswith("["):
-            return prompt
-        return f"[verse]\n{prompt}"
+        lyrics = prompt if prompt.lstrip().startswith("[") else f"[verse]\n{prompt}"
+        if len(re.findall(r"^\[[^\]\n]+\]", lyrics, flags=re.MULTILINE)) >= 2:
+            return lyrics
+        lines = lyrics.rstrip().splitlines()
+        body = "\n".join(lines[1:]).strip() if lines else ""
+        continuation = body or "instrumental continuation"
+        return f"{lyrics.rstrip()}\n\n[chorus]\n{continuation}"
 
     async def _run(
         self,
@@ -143,6 +148,8 @@ class YueSubprocessRuntime:
         stage1 = config.checkpoint_for(stage1_role)
         stage2 = config.checkpoint_for(CheckpointRole.STAGE2)
         codec = config.checkpoint_for(CheckpointRole.CODEC)
+        if output_path.suffix.lower() != ".mp3":
+            raise YueRuntimeError("YuE only supports .mp3 output")
         if upstream_root is None or stage1 is None or stage2 is None or codec is None:
             raise YueRuntimeError("adapter configuration was not validated before inference")
         if stage1.location is None or stage2.location is None or codec.location is None:

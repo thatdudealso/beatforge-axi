@@ -425,6 +425,35 @@ def test_remix_calls_mocked_single_track_icl_boundary(tmp_path: Path) -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("method", "operation_request"),
+    [
+        ("generate", GenerateRequest(prompt="lyrics", duration_s=30, out=Path("song.wav"))),
+        (
+            "remix",
+            RemixRequest(input_file=Path("reference.wav"), style="dream pop", out=Path("song.wav")),
+        ),
+    ],
+)
+def test_supported_operations_reject_non_mp3_output_before_loading_runtime(
+    tmp_path: Path,
+    method: str,
+    operation_request: object,
+) -> None:
+    runtime = StubRuntime()
+    engine = YueEngine(configured_yue(tmp_path), runtime=runtime)
+
+    with pytest.raises(UnsupportedOperationError, match=r"^yue only supports \.mp3 output$"):
+        asyncio.run(
+            getattr(engine, method)(
+                operation_request, OperationContext(job_id="job", workspace=tmp_path)
+            )
+        )
+
+    assert runtime.probe_calls == 0
+    assert runtime.calls == []
+
+
 def test_upstream_errors_are_translated_without_losing_stable_code(tmp_path: Path) -> None:
     engine = YueEngine(
         configured_yue(tmp_path),

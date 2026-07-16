@@ -238,6 +238,7 @@ class YueEngine:
         request: GenerateRequest,
         context: OperationContext,
     ) -> OperationResult:
+        self._ensure_mp3_output(request.out)
         segments = max(1, math.ceil(request.duration_s / 30))
         required_vram = (
             self.config.full_song_vram_gb if segments >= 4 else self.config.minimum_vram_gb
@@ -256,6 +257,7 @@ class YueEngine:
         request: RemixRequest,
         context: OperationContext,
     ) -> OperationResult:
+        self._ensure_mp3_output(request.out)
         self._ensure_ready(required_vram_gb=self.config.minimum_vram_gb)
         try:
             result = await self._runtime.remix(self.config, request, context)
@@ -298,6 +300,11 @@ class YueEngine:
         if not readiness.ready:
             diagnostic = readiness.diagnostics[0]
             raise EngineUnavailableError(f"{diagnostic.code}: {diagnostic.message}")
+
+    @staticmethod
+    def _ensure_mp3_output(path: Path) -> None:
+        if path.suffix.lower() != ".mp3":
+            raise UnsupportedOperationError("yue only supports .mp3 output")
 
     def _descriptor(self) -> EngineDescriptor:
         diagnostics = self.configuration_diagnostics()
@@ -356,7 +363,5 @@ class YueEngine:
     @staticmethod
     def _media_type(path: Path) -> str:
         return {
-            ".flac": "audio/flac",
             ".mp3": "audio/mpeg",
-            ".wav": "audio/wav",
         }.get(path.suffix.lower(), "application/octet-stream")
