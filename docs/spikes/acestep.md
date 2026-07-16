@@ -68,6 +68,17 @@ Readiness issues use stable codes and actionable messages. Native imports occur 
 the readiness gate. Native load and generation failures are translated to stable shared
 engine errors without exposing upstream exception text.
 
+## Adapter configuration surface
+
+`AceStepConfig` is adapter-local. `project_root` points at the pinned ACE-Step git checkout,
+and local weights are read from `project_root/checkpoints`. Activation also requires the
+verified checkpoint identity, primary checkpoint SHA-256, complete `verified_weights`
+manifest, MIT `model_license`, official `provenance_url`, and pinned `upstream_commit`.
+
+The only verified `config_path` is `acestep-v15-turbo`. Supported `device` values are `auto`,
+`cpu`, `cuda`, `mps`, and `xpu`. Runtime toggles `use_mlx_dit`, `offload_to_cpu`, and
+`offload_dit_to_cpu` are passed through to upstream only after the readiness gate succeeds.
+
 ## Phase 1 capabilities
 
 Only `generate` is declared. `repaint`, `remix`, `stems`, and `analyze` remain real protocol

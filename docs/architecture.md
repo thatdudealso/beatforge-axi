@@ -51,7 +51,9 @@ Adapters return lossless or engine-native audio into a shared post-processing pi
 - License: repository and official weights are MIT.
 - Fit: native text-to-music, cover, repaint, MP3, and model-dependent stem extraction.
 - Runtime: Python 3.11 to 3.12 with CUDA, MPS, ROCm, XPU, and CPU paths.
-- Decision: default engine. Pin an upstream commit because its API is evolving quickly.
+- Decision: default engine family. The Phase 1 adapter pins one upstream commit, verifies the
+  official `acestep-v15-turbo` checkpoint bundle, and declares only text generation until the
+  editing and extraction modes receive separate engine-neutral verification.
 
 ### YuE
 
@@ -78,7 +80,9 @@ Use ACE-Step 1.5 as the default. Keep YuE optional for vocals and MusicGen confi
 
 ### Consequences
 
-- Repaint and remix are native rather than simulated by regenerating an entire track.
+- Repaint and remix should stay native rather than being simulated by regenerating an entire
+  track, but each capability is declared only after its model variant and request semantics are
+  verified.
 - Model-variant capabilities must be represented explicitly.
 - The adapter must pin and isolate a fast-moving upstream API.
 - Apple MPS can be used for the first local spike, while CUDA benchmarks remain separate.
