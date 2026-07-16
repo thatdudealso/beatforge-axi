@@ -81,9 +81,33 @@ def _is_object_dict(value: object) -> TypeGuard[dict[str, object]]:
     return all(isinstance(key, str) for key in mapping)
 
 
+def _parse_simple_yaml_mapping(text: str) -> dict[str, object]:
+    root: dict[str, object] = {}
+    stack: list[tuple[int, dict[str, object]]] = [(-1, root)]
+    for raw_line in text.splitlines():
+        if not raw_line.strip():
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        key, separator, raw_value = raw_line.strip().partition(":")
+        assert separator == ":"
+        while indent <= stack[-1][0]:
+            stack.pop()
+        parent = stack[-1][1]
+        value = raw_value.strip()
+        if not value:
+            nested: dict[str, object] = {}
+            parent[key] = nested
+            stack.append((indent, nested))
+            continue
+        parent[key] = int(value) if value.isdecimal() else value
+    return root
+
+
 class FakeOmegaConf:
     @staticmethod
     def create(value: object) -> FakeConfig:
+        if isinstance(value, str):
+            return FakeConfig(_parse_simple_yaml_mapping(value))
         assert isinstance(value, dict)
         return FakeConfig(cast(dict[str, object], value))
 
@@ -110,6 +134,8 @@ class FakeOmegaConf:
     @staticmethod
     def to_container(value: object, *, resolve: bool) -> object:
         assert resolve is True
+        if isinstance(value, FakeConfig):
+            return deepcopy(value.values)
         return deepcopy(value)
 
 
@@ -476,6 +502,49 @@ def test_runtime_loads_snapshot_packages_with_safe_torch_deserialization(
     assert ("torch_load", ("compression_state_dict.bin", "cpu", True)) in calls
     assert ("torch_load", ("state_dict.bin", "cpu", True)) in calls
     assert not any(call[0].startswith("load_") and "package" in call[0] for call in calls)
+
+
+def test_runtime_accepts_exported_xp_cfg_yaml_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    calls = _install_fake_upstream(
+        monkeypatch,
+        compression_package={
+            "best_state": {"compression": "state"},
+            "xp.cfg": "compression_model: encodec\n",
+        },
+        lm_package={
+            "best_state": {"lm": "state"},
+            "xp.cfg": "\n".join(
+                [
+                    "conditioners:",
+                    "  description:",
+                    "    model: lut",
+                    "    lut:",
+                    "      n_bins: 256",
+                    "      tokenizer: noop",
+                ]
+            ),
+        },
+    )
+
+    AudioCraftRuntime().generate(
+        checkpoint=checkpoint,
+        checkpoint_sha256=checkpoint_sha256(checkpoint),
+        device=None,
+        prompt="ambient",
+        duration_s=1,
+        seed=None,
+        out=tmp_path / "out.wav",
+    )
+
+    compression_call = next(call for call in calls if call[0] == "build_compression_model")
+    lm_call = next(call for call in calls if call[0] == "build_lm_model")
+    assert isinstance(compression_call[1], FakeConfig)
+    assert compression_call[1].values == {"compression_model": "encodec"}
+    assert isinstance(lm_call[1], FakeConfig)
+    assert FakeOmegaConf.select(lm_call[1], "conditioners.description.lut.tokenizer") == "noop"
 
 
 def test_runtime_rejects_unsafe_checkpoint_package_shape(

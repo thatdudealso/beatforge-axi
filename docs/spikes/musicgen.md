@@ -82,9 +82,11 @@ directory with this shape:
 ```
 
 `compression_state_dict.bin` must contain its own `xp.cfg` and `best_state`; it must not contain a
-`pretrained` reference. The language model file must contain the compatible exported `xp.cfg` and
-`best_state` expected by the pinned loaders. A T5 conditioner must name a relative directory such
-as `aux/t5-base` with a `config.json` declaring `d_model` or `hidden_size`; absolute paths,
+`pretrained` reference. `xp.cfg` may be the OmegaConf YAML text emitted by AudioCraft export
+utilities or an already materialized mapping. The language model file must contain the compatible
+exported `xp.cfg` and `best_state` expected by the pinned loaders. A T5 conditioner must name a
+relative directory such as `aux/t5-base` with a `config.json` declaring `d_model` or `hidden_size`;
+absolute paths,
 missing paths, and ordinary Hugging Face identifiers are rejected. LUT conditioners must use the
 self-contained `noop` tokenizer. Other upstream conditioner types are rejected because the
 reviewed constructors can resolve hard-coded or configured remote models. The checkpoint digest

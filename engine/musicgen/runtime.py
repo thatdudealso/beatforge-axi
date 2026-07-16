@@ -194,6 +194,25 @@ def _package_mapping(package: Mapping[str, object], key: str) -> Mapping[str, ob
     return cast(Mapping[str, object], value)
 
 
+def _package_config(
+    package: Mapping[str, object],
+    key: str,
+    omega_conf: _OmegaConfClass,
+) -> _Config:
+    value = _package_value(package, key)
+    try:
+        config = omega_conf.create(value)
+        container = omega_conf.to_container(config, resolve=True)
+    except Exception as error:
+        raise RuntimeError(f"MusicGen checkpoint package has invalid {key}") from error
+    if not isinstance(container, Mapping):
+        raise RuntimeError(f"MusicGen checkpoint package has invalid {key}")
+    raw_container = cast(Mapping[object, object], container)
+    if not all(isinstance(raw_key, str) for raw_key in raw_container):
+        raise RuntimeError(f"MusicGen checkpoint package has invalid {key}")
+    return config
+
+
 def _load_checkpoint_package(
     torch: _TorchModule,
     path: Path,
@@ -343,9 +362,9 @@ def _load_model(
             "pretrained references could trigger an unverified download"
         )
 
-    compression_config = omega_conf.create(_package_mapping(compression_package, "xp.cfg"))
+    compression_config = _package_config(compression_package, "xp.cfg", omega_conf)
     compression_config.device = resolved_device
-    lm_config = omega_conf.create(_package_mapping(lm_package, "xp.cfg"))
+    lm_config = _package_config(lm_package, "xp.cfg", omega_conf)
     lm_config.device = resolved_device
     lm_config.dtype = "float32" if resolved_device == "cpu" else "float16"
     missing = object()
