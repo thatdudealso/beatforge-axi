@@ -45,6 +45,11 @@ _MEDIA_TYPES = {
     ".ogg": "audio/ogg",
     ".wav": "audio/wav",
 }
+_FFMPEG_CODECS = {
+    ".flac": ("flac", None),
+    ".mp3": ("libmp3lame", "192k"),
+    ".ogg": ("libvorbis", "192k"),
+}
 
 
 def _media_type(p: Path) -> str:
@@ -80,7 +85,9 @@ def _parse_prompt(prompt: str) -> dict[str, float]:
     return {"bpm": bpm, "root_hz": root, "energy": energy}
 
 
-def _synthesize(params: dict[str, float], duration_s: float) -> np.ndarray:
+def _synthesize(
+    params: dict[str, float], duration_s: float, rng: np.random.Generator
+) -> np.ndarray:
     """Generate a real audio buffer. Returns float32 mono in [-1, 1]."""
     sr = _SR
     n = int(duration_s * sr)
@@ -99,7 +106,7 @@ def _synthesize(params: dict[str, float], duration_s: float) -> np.ndarray:
     env = 0.6 + 0.4 * np.sin(2 * math.pi * beat * 4 * t) ** 2
 
     # Add some noise for texture
-    noise = np.random.uniform(-0.08, 0.08, n).astype(np.float32) * energy
+    noise = rng.uniform(-0.08, 0.08, n).astype(np.float32) * energy
 
     audio = (harm * env * energy * 0.7 + noise * 0.6).astype(np.float32)
 
@@ -132,6 +139,11 @@ def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) 
         filters.append(f"atrim=0:{target_duration}")
 
     filter_str = ",".join(filters)
+    suffix = dst.suffix.lower()
+    codec = _FFMPEG_CODECS.get(suffix)
+    if codec is None:
+        raise UnsupportedOperationError(f"synth does not support {suffix or 'suffixless'} output")
+    encoder, bitrate = codec
 
     cmd = [
         "ffmpeg",
@@ -141,11 +153,11 @@ def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) 
         "-af",
         filter_str,
         "-c:a",
-        "libmp3lame" if dst.suffix.lower() == ".mp3" else "copy",
-        "-b:a",
-        "192k" if dst.suffix.lower() == ".mp3" else "0",
-        str(dst),
+        encoder,
     ]
+    if bitrate is not None:
+        cmd.extend(["-b:a", bitrate])
+    cmd.append(str(dst))
     # Run with quiet logs
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -186,7 +198,8 @@ class SynthEngine(MusicEngine):
         self, request: GenerateRequest, context: OperationContext
     ) -> OperationResult:
         params = _parse_prompt(request.prompt)
-        audio = _synthesize(params, request.duration_s)
+        rng = np.random.default_rng(request.seed)
+        audio = _synthesize(params, request.duration_s, rng)
 
         # Always produce a WAV first (lossless working file) - this is real PCM audio
         wav_path = (

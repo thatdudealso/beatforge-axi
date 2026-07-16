@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 from dataclasses import dataclass, field
@@ -58,6 +59,11 @@ def _artifact_url(token: str) -> str:
     return f"/v1/artifacts/{token}"
 
 
+def _job_output_path(job_id: str, client_path: Path, fallback_name: str) -> Path:
+    name = client_path.name or fallback_name
+    return _WORKSPACE / job_id / name
+
+
 def _store_artifacts(job_id: str, op_result: OperationResult) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for idx, art in enumerate(op_result.artifacts):
@@ -93,32 +99,23 @@ def _execute_job(job: JobRecord, body: dict[str, Any]) -> None:
         model = REQUEST_MODELS[job.operation]
         request = model.model_validate(req_dict)
 
-        # Ensure output path lands inside workspace for the job
         if isinstance(request, GenerateRequest):
-            opath = Path(request.out)
-            if not opath.is_absolute():
-                request.out = _WORKSPACE / job.job_id / opath.name
+            request.out = _job_output_path(job.job_id, Path(request.out), "output.wav")
         elif isinstance(request, (RepaintRequest, RemixRequest)):
-            opath = Path(request.out)  # type: ignore[attr-defined]
-            if not opath.is_absolute():
-                request.out = _WORKSPACE / job.job_id / opath.name  # type: ignore[attr-defined]
+            request.out = _job_output_path(  # type: ignore[attr-defined]
+                job.job_id,
+                Path(request.out),
+                "output.mp3",  # type: ignore[attr-defined]
+            )
         elif isinstance(request, StemsRequest):
-            od = Path(request.out_dir)
-            if not od.is_absolute():
-                request.out_dir = _WORKSPACE / job.job_id / "stems"
+            request.out_dir = _job_output_path(job.job_id, Path(request.out_dir), "stems")
 
         context = OperationContext(job_id=job.job_id, workspace=_WORKSPACE / job.job_id)
         (_WORKSPACE / job.job_id).mkdir(parents=True, exist_ok=True)
 
         # Execute via real registry + engine (synth by default)
         engine = _REGISTRY.for_operation(engine_name, op)
-        loop = __import__("asyncio").get_event_loop()
-        if loop.is_running():
-            # Fallback sync path for thread
-            coro = getattr(engine, op.value)(request, context)
-            result: OperationResult = __import__("asyncio").run(coro)  # type: ignore
-        else:
-            result = loop.run_until_complete(getattr(engine, op.value)(request, context))
+        result: OperationResult = asyncio.run(getattr(engine, op.value)(request, context))
 
         artifacts = _store_artifacts(job.job_id, result)
         job.artifacts = artifacts

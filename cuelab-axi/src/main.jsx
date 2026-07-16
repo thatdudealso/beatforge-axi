@@ -88,10 +88,8 @@ function App() {
         const data = await r.json();
         setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
         if (data.status === "done" && data.artifacts && data.artifacts.length > 0) {
-          // Build absolute URL to the artifact endpoint (proxied by Vite)
           const first = data.artifacts[0];
-          const full = first.url.startsWith("http") ? first.url : `http://127.0.0.1:8765${first.url}`;
-          setAudioUrl(full);
+          setAudioUrl(first.url);
           break;
         }
         if (data.status === "error") break;
