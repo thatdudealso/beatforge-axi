@@ -84,11 +84,12 @@ directory with this shape:
 `compression_state_dict.bin` must contain its own `xp.cfg` and `best_state`; it must not contain a
 `pretrained` reference. The language model file must contain the compatible exported `xp.cfg` and
 `best_state` expected by the pinned loaders. A T5 conditioner must name a relative directory such
-as `aux/t5-base`; absolute paths, missing paths, and ordinary Hugging Face identifiers are
-rejected. LUT conditioners require no auxiliary weights. Other upstream conditioner types are
-rejected because the reviewed constructors can resolve hard-coded or configured remote models.
-The checkpoint digest and provenance evidence must cover every bundled auxiliary file and its MIT
-or Apache-2.0 weights license. Symbolic links and non-regular filesystem entries are rejected.
+as `aux/t5-base` with a `config.json` declaring `d_model` or `hidden_size`; absolute paths,
+missing paths, and ordinary Hugging Face identifiers are rejected. LUT conditioners must use the
+self-contained `noop` tokenizer. Other upstream conditioner types are rejected because the
+reviewed constructors can resolve hard-coded or configured remote models. The checkpoint digest
+and provenance evidence must cover every bundled auxiliary file and its MIT or Apache-2.0 weights
+license. Symbolic links and non-regular filesystem entries are rejected.
 
 The directory digest is deterministic. Files are sorted by relative POSIX path. For each file,
 the hash stream receives the path byte length as an unsigned 8-byte big-endian integer, the path
@@ -126,23 +127,25 @@ provenance location must be an absolute HTTP or HTTPS URL.
 Readiness diagnostics are stable codes and explain missing identity, digest, license, provenance,
 invalid provenance URL, verification, dependency, local files, digest mismatch, invalid checkpoint
 shape, and forbidden official checkpoints. Availability accepts only AudioCraft version `1.4.0a2`
-installed from the reviewed Git commit recorded in PEP 610 `direct_url.json` metadata. A wheel,
-version-only installation, different commit, or missing provenance metadata fails closed. Every
-gate runs before AudioCraft imports or model loading.
+installed from the reviewed Git commit recorded in PEP 610 `direct_url.json` metadata, with the
+imported package origin resolving inside that distribution. A wheel, version-only installation,
+different commit, shadowed import, or missing provenance metadata fails closed. Every gate runs
+before AudioCraft imports or model loading.
 
 ## Runtime behavior
 
 For a ready checkpoint, `generate` rechecks readiness off the event-loop thread, copies the entire
 checkpoint into a private temporary snapshot, and verifies the configured directory digest against
-that snapshot before importing AudioCraft. AudioCraft package inspection, conditioner preflight,
-and construction use only the snapshot. The runtime seeds PyTorch when requested, sets the
-requested duration, generates one prompt, and writes the requested `.wav`, `.flac`, `.mp3`, or
-`.ogg` file through AudioCraft. A process-wide lock serializes model construction, seeding,
-inference, and export because PyTorch seeding changes process-global RNG state. The result contains
-the artifact media type and duration plus sample rate, channels, frame count, seed, checkpoint
-identity, digest, model license, provenance URL, and verification status. Output setup and native
-failures are translated to `EngineUnavailableError` with a stable adapter message and the original
-exception retained as the cause.
+that snapshot before loading checkpoint packages with `torch.load(weights_only=True)`. AudioCraft
+package inspection, conditioner preflight, and construction use only the snapshot. The runtime
+seeds PyTorch when requested, sets the requested duration, generates one prompt, and writes the
+requested `.wav`, `.flac`, `.mp3`, or `.ogg` file through AudioCraft. A process-wide lock
+serializes snapshot creation, model construction, seeding, inference, and export because PyTorch
+seeding changes process-global RNG state and queued requests must not duplicate multi-gigabyte
+snapshots. The result contains the artifact media type and duration plus sample rate, channels,
+frame count, seed, checkpoint identity, digest, model license, provenance URL, and verification
+status. Output setup and native failures are translated to `EngineUnavailableError` with a stable
+adapter message and the original exception retained as the cause.
 
 ## Validation record
 
@@ -156,9 +159,9 @@ Validated in this worktree:
   checkpoint rejection before load, deterministic digest matching, stable unsupported operations,
   native error translation, and artifact metadata.
 - The AudioCraft boundary was exercised with a complete fake matching the pinned API, including
-  exact build metadata, immutable snapshot loading, local conditioner preflight, concurrent seed
-  serialization, device and seed forwarding, duration configuration, prompt generation, waveform
-  shape, and audio export.
+  exact build metadata and import origin, safe checkpoint package loading, immutable snapshot
+  loading, local conditioner preflight, concurrent snapshot and seed serialization, device and
+  seed forwarding, duration configuration, prompt generation, waveform shape, and audio export.
 - Project pytest, Ruff formatting, Ruff lint, and basedpyright checks were run in the uv-managed
   worktree environment.
 

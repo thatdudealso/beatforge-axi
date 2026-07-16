@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
 from threading import Event
-from types import ModuleType
-from typing import Any, Self, TypeGuard, cast
+from types import ModuleType, SimpleNamespace
+from typing import Any, ClassVar, Self, TypeGuard, cast
 
 import pytest
 
@@ -128,6 +128,7 @@ def _install_fake_upstream(
     compression_package: dict[str, object] | None = None,
     lm_package: dict[str, object] | None = None,
     on_lm_load: Callable[[Path], None] | None = None,
+    on_lm_build: Callable[[FakeConfig, ModuleType], None] | None = None,
     on_generate: Callable[[list[str]], None] | None = None,
 ) -> list[tuple[str, object]]:
     calls: list[tuple[str, object]] = []
@@ -142,7 +143,7 @@ def _install_fake_upstream(
             "conditioners": {
                 "description": {
                     "model": "lut",
-                    "lut": {"n_bins": 256},
+                    "lut": {"n_bins": 256, "tokenizer": "noop"},
                 }
             }
         },
@@ -156,6 +157,7 @@ def _install_fake_upstream(
             lm: FakeNativeModel,
         ) -> FakeMusicGenModel:
             calls.append(("construct_musicgen", (name, compression_model.kind, lm.kind)))
+            calls.append(("construct_lm_cfg", getattr(lm, "cfg", None)))
             return generated_model
 
     def load_compression_model_ckpt(checkpoint: Path) -> dict[str, object]:
@@ -174,6 +176,8 @@ def _install_fake_upstream(
 
     def get_lm_model(config: FakeConfig) -> FakeNativeModel:
         calls.append(("build_lm_model", config))
+        if on_lm_build is not None:
+            on_lm_build(config, modules["audiocraft.models.builders"])
         return FakeNativeModel("lm", calls)
 
     def audio_write(
@@ -189,6 +193,28 @@ def _install_fake_upstream(
     def manual_seed(seed: int) -> None:
         calls.append(("manual_seed", seed))
 
+    def torch_load(path: Path, *, map_location: str, weights_only: bool) -> dict[str, object]:
+        calls.append(("torch_load", (path.name, map_location, weights_only)))
+        if path.name == "compression_state_dict.bin":
+            return compression_package
+        if path.name == "state_dict.bin":
+            if on_lm_load is not None:
+                on_lm_load(path.parent)
+            return lm_package
+        raise AssertionError(path)
+
+    class RejectingRemoteT5Conditioner:
+        MODELS: ClassVar[list[str]] = ["t5-base"]
+        MODELS_DIMS: ClassVar[dict[str, int]] = {"t5-base": 768}
+
+        def __init__(self, name: str, **kwargs: object) -> None:
+            if name not in self.MODELS:
+                raise AssertionError("remote T5 conditioner was constructed")
+            if Path(name).is_absolute():
+                calls.append(("local_t5_conditioner", name))
+            else:
+                calls.append(("remote_t5_conditioner", name))
+
     class FakeCuda:
         @staticmethod
         def device_count() -> int:
@@ -201,13 +227,22 @@ def _install_fake_upstream(
         "audiocraft.models": ModuleType("audiocraft.models"),
         "audiocraft.models.builders": ModuleType("audiocraft.models.builders"),
         "audiocraft.models.loaders": ModuleType("audiocraft.models.loaders"),
+        "audiocraft.modules": ModuleType("audiocraft.modules"),
+        "audiocraft.modules.conditioners": ModuleType("audiocraft.modules.conditioners"),
         "audiocraft.data": ModuleType("audiocraft.data"),
         "audiocraft.data.audio": ModuleType("audiocraft.data.audio"),
     }
     modules["torch"].manual_seed = manual_seed  # type: ignore[attr-defined]
+    modules["torch"].load = torch_load  # type: ignore[attr-defined]
     modules["torch"].cuda = FakeCuda()  # type: ignore[attr-defined]
     modules["omegaconf"].OmegaConf = FakeOmegaConf  # type: ignore[attr-defined]
     modules["audiocraft.models"].MusicGen = FakeMusicGen  # type: ignore[attr-defined]
+    modules["audiocraft.modules.conditioners"].T5Conditioner = (  # type: ignore[attr-defined]
+        RejectingRemoteT5Conditioner
+    )
+    modules["audiocraft.models.builders"].T5Conditioner = (  # type: ignore[attr-defined]
+        RejectingRemoteT5Conditioner
+    )
     modules["audiocraft.models.builders"].get_compression_model = (  # type: ignore[attr-defined]
         get_compression_model
     )
@@ -225,9 +260,10 @@ def _install_fake_upstream(
 
 
 class FakeDistribution:
-    def __init__(self, version: str, commit_id: str | None) -> None:
+    def __init__(self, version: str, commit_id: str | None, root: Path) -> None:
         self.version = version
         self.commit_id = commit_id
+        self.root = root
 
     def read_text(self, filename: str) -> str | None:
         assert filename == "direct_url.json"
@@ -240,18 +276,26 @@ class FakeDistribution:
             }
         )
 
+    def locate_file(self, path: str) -> Path:
+        return self.root / path
+
 
 def _installed_distribution(
     monkeypatch: pytest.MonkeyPatch,
     *,
     version: str = "1.4.0a2",
     commit_id: str | None = _REVIEWED_COMMIT,
+    package_origin: Path | None = None,
+    distribution_root: Path | None = None,
 ) -> None:
+    root = distribution_root or Path("/opt/reviewed-audiocraft")
+    origin = package_origin or root / "audiocraft" / "__init__.py"
+
     def installed_spec(name: str) -> object:
-        return object()
+        return SimpleNamespace(origin=str(origin))
 
     def find_distribution(name: str) -> FakeDistribution:
-        return FakeDistribution(version, commit_id)
+        return FakeDistribution(version, commit_id, root)
 
     monkeypatch.setattr(importlib.util, "find_spec", installed_spec)
     monkeypatch.setattr(
@@ -290,6 +334,21 @@ def test_runtime_rejects_unreviewed_audiocraft_builds(
     commit_id: str | None,
 ) -> None:
     _installed_distribution(monkeypatch, version=version, commit_id=commit_id)
+
+    diagnostic = AudioCraftRuntime().availability_diagnostic()
+
+    assert diagnostic is not None
+    assert "reviewed AudioCraft build" in diagnostic
+
+
+def test_runtime_rejects_shadowed_audiocraft_import_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _installed_distribution(
+        monkeypatch,
+        package_origin=Path("/tmp/shadow/audiocraft/__init__.py"),
+        distribution_root=Path("/opt/reviewed-audiocraft"),
+    )
 
     diagnostic = AudioCraftRuntime().availability_diagnostic()
 
@@ -338,6 +397,8 @@ def test_runtime_uses_verified_snapshot_and_local_checkpoint_generation_api(
     assert observed_loader_paths[0].parent != checkpoint.parent
     assert observed_snapshot_bytes == [b"language model"]
     assert ("manual_seed", 42) in calls
+    construct_lm_cfg = next(call for call in calls if call[0] == "construct_lm_cfg")
+    assert isinstance(construct_lm_cfg[1], FakeConfig)
     assert ("set_generation_params", 1.5) in calls
     assert ("generate", (["warm analog synth"], False)) in calls
     write_call = next(call for call in calls if call[0] == "audio_write")
@@ -396,6 +457,47 @@ def test_runtime_rejects_compression_reference_before_model_construction(
     assert not any(call[0].startswith("build_") for call in calls)
 
 
+def test_runtime_loads_snapshot_packages_with_safe_torch_deserialization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    calls = _install_fake_upstream(monkeypatch)
+
+    AudioCraftRuntime().generate(
+        checkpoint=checkpoint,
+        checkpoint_sha256=checkpoint_sha256(checkpoint),
+        device=None,
+        prompt="ambient",
+        duration_s=1,
+        seed=None,
+        out=tmp_path / "out.wav",
+    )
+
+    assert ("torch_load", ("compression_state_dict.bin", "cpu", True)) in calls
+    assert ("torch_load", ("state_dict.bin", "cpu", True)) in calls
+    assert not any(call[0].startswith("load_") and "package" in call[0] for call in calls)
+
+
+def test_runtime_rejects_unsafe_checkpoint_package_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    calls = _install_fake_upstream(monkeypatch, lm_package={"xp.cfg": {}})
+
+    with pytest.raises(RuntimeError, match="best_state"):
+        AudioCraftRuntime().generate(
+            checkpoint=checkpoint,
+            checkpoint_sha256=checkpoint_sha256(checkpoint),
+            device=None,
+            prompt="ambient",
+            duration_s=1,
+            seed=None,
+            out=tmp_path / "out.wav",
+        )
+
+    assert not any(call[0].startswith("build_") for call in calls)
+
+
 def test_runtime_rejects_remote_t5_conditioner_before_model_construction(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -422,13 +524,57 @@ def test_runtime_rejects_remote_t5_conditioner_before_model_construction(
     assert not any(call[0].startswith("build_") for call in calls)
 
 
+def test_runtime_rejects_lut_conditioners_with_downloadable_tokenizers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_upstream(
+        monkeypatch,
+        lm_package={
+            "best_state": {},
+            "xp.cfg": {
+                "conditioners": {
+                    "description": {
+                        "model": "lut",
+                        "lut": {"n_bins": 256, "tokenizer": "whitespace"},
+                    }
+                }
+            },
+        },
+    )
+    checkpoint = _checkpoint(tmp_path)
+
+    with pytest.raises(RuntimeError, match="noop"):
+        AudioCraftRuntime().generate(
+            checkpoint=checkpoint,
+            checkpoint_sha256=checkpoint_sha256(checkpoint),
+            device=None,
+            prompt="ambient",
+            duration_s=1,
+            seed=None,
+            out=tmp_path / "out.wav",
+        )
+
+    assert not any(call[0].startswith("build_") for call in calls)
+
+
 def test_runtime_localizes_verified_t5_conditioner_asset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     checkpoint = _checkpoint(tmp_path)
     auxiliary = checkpoint / "aux" / "t5-base"
     auxiliary.mkdir(parents=True)
-    (auxiliary / "config.json").write_text("{}")
+    (auxiliary / "config.json").write_text('{"d_model": 768}')
+
+    def build_t5(config: FakeConfig, builders: ModuleType) -> None:
+        name = FakeOmegaConf.select(config, "conditioners.description.t5.name")
+        assert isinstance(name, str)
+        builders.T5Conditioner(  # type: ignore[attr-defined]
+            name=name,
+            output_dim=32,
+            finetune=False,
+            device=config.device,
+        )
+
     calls = _install_fake_upstream(
         monkeypatch,
         lm_package={
@@ -442,6 +588,7 @@ def test_runtime_localizes_verified_t5_conditioner_asset(
                 }
             },
         },
+        on_lm_build=build_t5,
     )
 
     AudioCraftRuntime().generate(
@@ -463,6 +610,7 @@ def test_runtime_localizes_verified_t5_conditioner_asset(
     assert localized.is_absolute()
     assert localized.name == "t5-base"
     assert localized.parent.name == "aux"
+    assert ("local_t5_conditioner", name) in calls
 
 
 def test_runtime_serializes_seed_and_inference_across_requests(
@@ -504,3 +652,48 @@ def test_runtime_serializes_seed_and_inference_across_requests(
 
     assert calls.index(("manual_seed", 1)) < calls.index(("generate", (["first"], False)))
     assert calls.index(("generate", (["first"], False))) < calls.index(("manual_seed", 2))
+
+
+def test_runtime_serializes_snapshot_creation_with_inference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint = _checkpoint(tmp_path)
+    first_started = Event()
+    release_first = Event()
+    copied_snapshots: list[Path] = []
+    original_copytree = runtime_module.shutil.copytree
+
+    def block_first_request(prompts: list[str]) -> None:
+        if prompts == ["first"]:
+            first_started.set()
+            assert release_first.wait(timeout=2)
+
+    def copytree(source: Path, destination: Path, *, symlinks: bool) -> Path:
+        copied_snapshots.append(destination)
+        return original_copytree(source, destination, symlinks=symlinks)
+
+    monkeypatch.setattr(runtime_module.shutil, "copytree", copytree)
+    _install_fake_upstream(monkeypatch, on_generate=block_first_request)
+    runtime = AudioCraftRuntime()
+    digest = checkpoint_sha256(checkpoint)
+
+    def generate(prompt: str) -> None:
+        runtime.generate(
+            checkpoint=checkpoint,
+            checkpoint_sha256=digest,
+            device=None,
+            prompt=prompt,
+            duration_s=1,
+            seed=None,
+            out=tmp_path / f"{prompt}.wav",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(generate, "first")
+        assert first_started.wait(timeout=2)
+        second = executor.submit(generate, "second")
+        time.sleep(0.05)
+        assert len(copied_snapshots) == 1
+        release_first.set()
+        first.result(timeout=2)
+        second.result(timeout=2)
