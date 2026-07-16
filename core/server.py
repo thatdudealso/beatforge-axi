@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -235,18 +236,18 @@ class BeatForgeHandler(BaseHTTPRequestHandler):
             if artifact is None or not artifact.path.exists():
                 self._json(HTTPStatus.NOT_FOUND, {"error": "artifact_not_found"})
                 return
-            # Safe serve: only tokens we registered map to real files in our workspace
             try:
-                data = artifact.path.read_bytes()
+                size = artifact.path.stat().st_size
+                with artifact.path.open("rb") as fp:
+                    self.send_response(HTTPStatus.OK)
+                    self.send_header("content-type", artifact.media_type)
+                    self.send_header("content-length", str(size))
+                    self.send_header("content-disposition", _content_disposition(artifact.filename))
+                    self.end_headers()
+                    shutil.copyfileobj(fp, self.wfile, length=1024 * 64)
             except Exception:
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "read_failed"})
                 return
-            self.send_response(HTTPStatus.OK)
-            self.send_header("content-type", artifact.media_type)
-            self.send_header("content-length", str(len(data)))
-            self.send_header("content-disposition", _content_disposition(artifact.filename))
-            self.end_headers()
-            self.wfile.write(data)
             return
 
         self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
