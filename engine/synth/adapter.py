@@ -143,7 +143,10 @@ def _validate_duration(duration_s: float) -> float:
 
 def _staging_wav_path(request_out: Path, context: OperationContext) -> Path:
     stem = request_out.stem or "output"
-    return context.workspace / f"{stem}.wav"
+    job_segment = "".join(
+        char if char.isalnum() or char in "._-" else "_" for char in context.job_id
+    ).strip("._")
+    return context.workspace / (job_segment or "job") / f"{stem}.wav"
 
 
 def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) -> None:
@@ -178,8 +181,22 @@ def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) 
     if bitrate is not None:
         cmd.extend(["-b:a", bitrate])
     cmd.append(str(dst))
-    # Run with quiet logs
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise UnsupportedOperationError("FFmpeg is required for audio conversion") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").strip().splitlines()
+        message = detail[-1] if detail else "conversion failed"
+        raise UnsupportedOperationError(
+            f"FFmpeg {suffix.lstrip('.')} export failed: {message}"
+        ) from exc
 
 
 def _has_ffmpeg() -> bool:

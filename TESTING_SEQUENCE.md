@@ -187,5 +187,3 @@ At that point we will drive the rest of the no-mistakes pipeline on the axi cata
 **Do not** manually create PRs or push to main. Everything for the catalog contribution must go through `no-mistakes`.
 
 Good luck with the testing. Report back with results.
-TESTDOC
-echo "File written successfully" && ls -l /Users/thatdudealso/beatforge-axi/TESTING_SEQUENCE.md

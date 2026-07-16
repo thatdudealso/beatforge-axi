@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from engine.errors import EngineValidationError
+from engine.errors import EngineValidationError, UnsupportedOperationError
 from engine.models import GenerateRequest, OperationContext
 from engine.synth import SynthEngine
 from engine.synth import adapter as synth_adapter
@@ -57,6 +57,7 @@ def test_ffmpeg_convert_uses_real_encoder_when_filtering(
         check: bool,
         stdout: int,
         stderr: int,
+        text: bool,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0)
@@ -113,7 +114,41 @@ def test_non_wav_generation_stages_wav_inside_operation_workspace(
     )
 
     assert sibling_wav.read_bytes() == b"existing-user-audio"
-    assert converted_from == [workspace / "song.wav"]
+    assert converted_from == [workspace / "job" / "song.wav"]
+
+
+def test_ffmpeg_convert_reports_structured_conversion_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def run(
+        cmd: list[str],
+        *,
+        check: bool,
+        stdout: int,
+        stderr: int,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.CalledProcessError(
+            1,
+            cmd,
+            stderr="encoder missing\nconversion exploded",
+        )
+
+    monkeypatch.setattr(synth_adapter.subprocess, "run", run)
+    monkeypatch.setattr("engine.synth.adapter._has_ffmpeg", lambda: True)
+
+    with pytest.raises(UnsupportedOperationError, match="FFmpeg mp3 export failed"):
+        asyncio.run(
+            SynthEngine().generate(
+                GenerateRequest(
+                    prompt="warm lofi",
+                    duration_s=0.1,
+                    out=tmp_path / "out.mp3",
+                    seed=123,
+                ),
+                OperationContext(job_id="ffmpeg", workspace=tmp_path / "workspace"),
+            )
+        )
 
 
 @pytest.mark.parametrize("duration_s", [0.0, 300.1])

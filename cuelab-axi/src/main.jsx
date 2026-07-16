@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AudioLines,
@@ -45,6 +45,7 @@ function App() {
   const [engine, setEngine] = useState("synth");
   const [job, setJob] = useState(null);
   const [audioArtifact, setAudioArtifact] = useState(null);
+  const activeRequestRef = useRef(0);
   const audioUrl = audioArtifact?.url || null;
   const deckLabel = useMemo(() => `${preset} / ${duration}s`, [preset, duration]);
   const enabled = useMemo(() => {
@@ -59,6 +60,8 @@ function App() {
   }, [engine]);
 
   async function submit(operation, body) {
+    const requestId = activeRequestRef.current + 1;
+    activeRequestRef.current = requestId;
     setJob({ operation, status: "queued", route: operations[operation] });
     setAudioArtifact(null);
     try {
@@ -68,6 +71,7 @@ function App() {
         body: JSON.stringify({ engine, ...body })
       });
       const payload = await response.json();
+      if (activeRequestRef.current !== requestId) return;
       if (!response.ok) {
         setJob({
           operation,
@@ -83,7 +87,7 @@ function App() {
 
       // Poll for completion (real execution on server)
       if (jid) {
-        pollJob(jid, operation);
+        pollJob(jid, operation, requestId);
       } else {
         setJob({
           operation,
@@ -94,17 +98,20 @@ function App() {
         });
       }
     } catch (error) {
+      if (activeRequestRef.current !== requestId) return;
       setJob({ operation, status: "offline", route: operations[operation], payload: String(error) });
     }
   }
 
-  async function pollJob(jobId, op) {
+  async function pollJob(jobId, op, requestId) {
     const pollAttempts = 60; // ~30s
     for (let i = 0; i < pollAttempts; i++) {
       await new Promise(r => setTimeout(r, 500));
+      if (activeRequestRef.current !== requestId) return;
       try {
         const r = await fetch(`/v1/jobs/${jobId}`);
         const data = await r.json();
+        if (activeRequestRef.current !== requestId) return;
         setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
         if (data.status === "done" && data.artifacts && data.artifacts.length > 0) {
           const first = data.artifacts[0];
@@ -116,6 +123,7 @@ function App() {
         // keep polling
       }
     }
+    if (activeRequestRef.current !== requestId) return;
     setJob(prev => ({
       ...(prev || {}),
       operation: op,
