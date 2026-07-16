@@ -63,7 +63,8 @@ Adapters return lossless or engine-native audio into a shared post-processing pi
 ### AudioCraft MusicGen
 
 - License: code is MIT, while Meta's released model weights are CC BY-NC 4.0.
-- Fit: text generation, melody conditioning, and continuation. No native bounded repaint or stems.
+- Fit: text generation only in BeatForge Phase 1. Melody conditioning, continuation, bounded
+  repaint, remix, stems, and analysis are not advertised by the adapter.
 - Decision: include the adapter, configuration schema, tests, and documentation. Keep it inactive until a MusicGen-compatible checkpoint has verified MIT or Apache-2.0 weight provenance. Never auto-download or silently select Meta's released weights.
 
 ## ADR-001: Choose ACE-Step 1.5 as the default engine
@@ -110,5 +111,6 @@ Expose versioned loopback HTTP endpoints and SSE progress from `beatforge-axi se
 
 - [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 - [YuE](https://github.com/multimodal-art-projection/YuE)
-- [AudioCraft MusicGen model card](https://raw.githubusercontent.com/facebookresearch/audiocraft/main/model_cards/MUSICGEN_MODEL_CARD.md)
+- [AudioCraft MusicGen Phase 1 spike](spikes/musicgen.md)
+- [AudioCraft MusicGen model card](https://github.com/facebookresearch/audiocraft/blob/896ec7c47f5e5d1e5aa1e4b260c4405328bf009d/model_cards/MUSICGEN_MODEL_CARD.md)
 - [TOON specification](https://toonformat.dev/reference/spec.html)

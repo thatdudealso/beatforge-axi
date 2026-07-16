@@ -29,8 +29,9 @@ committed 2025-03-13. All source links below are pinned to that commit.
   `MusicGen.get_pretrained` auto-selects CUDA when available and otherwise CPU, but upstream's
   user documentation says a GPU is required for local use. CPU and MPS are therefore not claimed
   as validated hardware targets by this spike.
-- Generation API: `MusicGen.get_pretrained(local_path, device=...)`,
-  `set_generation_params(duration=...)`, and `generate([prompt], progress=False)` return audio
+- Generation API: the reviewed constructors can build `MusicGen(name, compression_model, lm)`
+  from local checkpoint packages without calling `MusicGen.get_pretrained`; generation still uses
+  `set_generation_params(duration=...)`, and `generate([prompt], progress=False)` returns audio
   shaped as batch, channels, frames. See
   [`MusicGen`](https://github.com/facebookresearch/audiocraft/blob/896ec7c47f5e5d1e5aa1e4b260c4405328bf009d/audiocraft/models/musicgen.py#L28-L105)
   and
