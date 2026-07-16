@@ -3,13 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def test_cuelab_polling_keeps_waiting_for_terminal_state() -> None:
+def test_cuelab_polling_surfaces_terminal_errors() -> None:
     source = Path("cuelab-axi/src/main.jsx").read_text()
 
     assert "while (activeRequestRef.current === requestId)" in source
-    assert "pollAttempts" not in source
-    assert 'status: "timeout"' not in source
-    assert "job_poll_timeout" not in source
+    assert "if (!r.ok)" in source
+    assert "consecutiveFailures" in source
+    assert "maxFailures" in source
+    assert "keep polling" not in source
 
 
 def test_cuelab_ignores_superseded_poll_results() -> None:
@@ -27,11 +28,19 @@ def test_cuelab_transport_controls_are_visible_and_explicit() -> None:
     assert "generateButton" in source
     assert 'type="button"' in source
 
+
 def test_cuelab_export_checks_http_and_delays_url_revoke() -> None:
     source = Path("cuelab-axi/src/main.jsx").read_text()
 
     assert "if (!resp.ok)" in source
     assert "window.setTimeout(() => URL.revokeObjectURL(url), 1000);" in source
+
+
+def test_cuelab_polling_stops_on_fetch_failure() -> None:
+    source = Path("cuelab-axi/src/main.jsx").read_text()
+
+    assert "consecutiveFailures += 1;" in source
+    assert "if (consecutiveFailures >= maxFailures)" in source
 
 
 def test_cuelab_generate_defaults_to_real_audio_container() -> None:

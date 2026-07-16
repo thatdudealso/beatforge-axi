@@ -79,6 +79,10 @@ def _job_output_path(job_id: str, client_path: Path, fallback_name: str) -> Path
     return _WORKSPACE / job_id / name
 
 
+def _job_workspace(job_id: str) -> Path:
+    return (_ensure_workspace() / job_id).resolve()
+
+
 def _content_disposition(filename: str) -> str:
     display_name = "".join(
         "_" if ord(char) < 32 or ord(char) == 127 or char in {'"', "\\"} else char
@@ -104,28 +108,29 @@ def _validate_engine_request(engine_name: str, operation: Operation, request: ob
 def _store_artifacts(job_id: str, op_result: OperationResult) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     workspace = _ensure_workspace()
+    job_workspace = _job_workspace(job_id)
     for idx, art in enumerate(op_result.artifacts):
         src = Path(art.path)
-        if not src.exists():
-            continue
+        if not src.exists() or not src.is_file():
+            raise ValueError(f"artifact path is not a file: {src}")
+        resolved_src = src.resolve()
+        if not resolved_src.is_relative_to(job_workspace):
+            raise ValueError(f"artifact path escapes the job workspace: {src}")
         token = f"{job_id}-{idx}-{uuid4().hex}"
-        dst = workspace / f"{token}{src.suffix.lower()}"
+        dst = workspace / f"{token}{resolved_src.suffix.lower()}"
         dst.parent.mkdir(parents=True, exist_ok=True)
-        # Copy to stable workspace location (simple and safe)
-        import shutil
-
-        shutil.copy2(src, dst)
+        shutil.copy2(resolved_src, dst)
         _ARTIFACTS[token] = ArtifactRecord(
             path=dst.resolve(),
             media_type=art.media_type or "application/octet-stream",
-            filename=src.name,
+            filename=resolved_src.name,
         )
         out.append(
             {
                 "url": _artifact_url(token),
                 "media_type": art.media_type or "application/octet-stream",
                 "duration_s": art.duration_s,
-                "filename": src.name,
+                "filename": resolved_src.name,
             }
         )
     return out

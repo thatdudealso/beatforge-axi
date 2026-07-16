@@ -3,9 +3,14 @@
 Local-first, open-source music generation for agents and humans.
 
 `beatforge-axi` is the AXI-style command surface and local runtime. `cuelab-axi`
-is the turntable UI that uses the same `/v1` API. The project has one engine,
-one manifest, and two front doors: terse commands for agents and a deck for
-people.
+is the turntable UI that uses the same `/v1` API. The goal is one music system
+with two front doors: terse commands for agents and a visual deck for people.
+
+The project is live and still evolving. Phase 0 established the engine contract,
+operation manifest, contribution rules, CI, and architecture. Phase 1 added
+ACE-Step 1.5, YuE, and AudioCraft MusicGen adapters behind the shared contract.
+Phase 2 adds the CLI and loopback API surface. CueLab now has a React deck UI
+that targets that API boundary and can play and export returned audio.
 
 ## What this project is
 
@@ -42,7 +47,8 @@ Implemented and wired together:
   `stems`, and `analyze`.
 - Operation manifest tying CLI commands, `/v1` routes, UI controls, and required
   capabilities together.
-- Real local synth runtime, artifact serving, and job orchestration.
+- Real local synth runtime, real job execution, artifact serving, and contract
+  tests.
 - AXI CLI command surface for generate, repaint, remix, stems, analyze, and
   serve.
 - Loopback `/v1/manifest` and `/v1/jobs/{operation}` server boundary.
@@ -159,9 +165,9 @@ tests/           Contract and smoke tests
 
 ## CueLab
 
-CueLab is the planned web UI for the same operations. It should feel like a
-usable deck, not a marketing page: prompt deck, presets, waveform-on-platter,
-repaint region selection, stem mixer, loop editor, and export controls.
+CueLab is the web UI for the same operations. It should feel like a usable
+deck, not a marketing page: prompt deck, presets, waveform-on-platter, repaint
+region selection, stem mixer, loop editor, and export controls.
 
 See [cuelab-axi/README.md](cuelab-axi/README.md) for the live UI surface.
 

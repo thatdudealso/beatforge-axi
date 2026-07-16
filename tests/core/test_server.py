@@ -206,6 +206,64 @@ def test_artifact_endpoint_serves_registered_media_type(
         thread.join(timeout=5)
 
 
+def test_generate_job_rejects_artifacts_outside_job_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    external_artifact = tmp_path / "outside.wav"
+    external_artifact.write_bytes(b"external")
+
+    class _OutsideRegistry:
+        def for_operation(self, engine_name: str, operation: Operation) -> object:
+            return _OutsideEngine(external_artifact)
+
+    class _OutsideEngine:
+        def __init__(self, artifact_path: Path) -> None:
+            self._artifact_path = artifact_path
+
+        async def generate(
+            self, request: GenerateRequest, context: OperationContext
+        ) -> OperationResult:
+            request.out.parent.mkdir(parents=True, exist_ok=True)
+            request.out.write_bytes(b"audio")
+            return OperationResult(
+                operation=Operation.GENERATE,
+                artifacts=[
+                    Artifact(path=self._artifact_path, media_type="audio/wav", duration_s=1.0),
+                ],
+            )
+
+    workspace = tmp_path / "server-workspace"
+    monkeypatch.setattr(server_module, "_WORKSPACE", workspace)
+    monkeypatch.setattr(server_module, "_JOBS", {})
+    monkeypatch.setattr(server_module, "_ARTIFACTS", {})
+    monkeypatch.setattr(server_module, "_REGISTRY", _OutsideRegistry())
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server_module.BeatForgeHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        accepted = _post_json(
+            f"{base_url}/v1/jobs/generate",
+            {
+                "engine": "synth",
+                "prompt": "warm lofi",
+                "duration_s": 1,
+                "out": str(tmp_path / "take.wav"),
+            },
+        )
+        job = _wait_for_job(base_url, accepted["job_id"])
+
+        assert job["status"] == "error", job
+        assert "job workspace" in job["error"]
+        assert not list(workspace.glob("*.wav"))
+        assert server_module.__dict__["_ARTIFACTS"] == {}
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
 def test_artifact_endpoint_streams_large_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

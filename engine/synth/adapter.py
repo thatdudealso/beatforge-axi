@@ -1,4 +1,4 @@
-"""Real local synthesis engine (development / lightweight fallback).
+"""Real local synthesis engine.
 
 Generates actual playable audio using numpy.
 Maps prompt text to simple musical parameters (BPM, root note, energy).
@@ -7,15 +7,18 @@ Produces a short loop of harmonic content + noise + ADSR envelope.
 Output is always real PCM. Post-processing (normalize, duration, MP3) is applied
 via the shared audio pipeline.
 
-This engine is always "ready" (pure CPU, no weights). It is the default for
-local testing until a heavy model (ACE-Step etc.) is configured and passes gates.
+This engine is always "ready" (pure CPU, no weights). It is the default
+runtime engine for local synthesis until a heavy model (ACE-Step etc.) is
+configured and passes gates.
 """
 
 from __future__ import annotations
 
 import asyncio
 import math
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -199,6 +202,18 @@ def _ffmpeg_convert(src: Path, dst: Path, target_duration: float | None = None) 
         ) from exc
 
 
+def _temp_export_path(final_path: Path) -> Path:
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{final_path.stem}-",
+        suffix=final_path.suffix or ".tmp",
+        dir=final_path.parent,
+        delete=False,
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+    return tmp_path
+
+
 def _has_ffmpeg() -> bool:
     try:
         subprocess.run(
@@ -239,24 +254,15 @@ class SynthEngine(MusicEngine):
         self, request: GenerateRequest, context: OperationContext
     ) -> OperationResult:
         target_dur = _validate_duration(request.duration_s)
-        params = _parse_prompt(request.prompt)
-        rng = np.random.default_rng(request.seed)
-        audio = _synthesize(params, target_dur, rng)
-
-        # Always produce a WAV first (lossless working file) - this is real PCM audio
-        wav_path = (
-            _staging_wav_path(request.out, context)
-            if request.out.suffix.lower() != ".wav"
-            else request.out
-        )
-        _write_wav(wav_path, audio)
-
         final_path = request.out
-
         suffix = final_path.suffix.lower()
         if suffix == ".wav":
+            params = _parse_prompt(request.prompt)
+            rng = np.random.default_rng(request.seed)
+            audio = _synthesize(params, target_dur, rng)
+            _write_wav(final_path, audio)
             artifacts = [
-                Artifact(path=wav_path, media_type="audio/wav", duration_s=target_dur),
+                Artifact(path=final_path, media_type="audio/wav", duration_s=target_dur),
             ]
         else:
             if suffix not in _FFMPEG_CODECS:
@@ -265,7 +271,21 @@ class SynthEngine(MusicEngine):
                 )
             if not _has_ffmpeg():
                 raise UnsupportedOperationError(f"FFmpeg is required for {suffix} output")
-            await asyncio.to_thread(_ffmpeg_convert, wav_path, final_path, target_dur)
+            params = _parse_prompt(request.prompt)
+            rng = np.random.default_rng(request.seed)
+            audio = _synthesize(params, target_dur, rng)
+            wav_path = _staging_wav_path(request.out, context)
+            _write_wav(wav_path, audio)
+            export_path = _temp_export_path(final_path)
+            try:
+                await asyncio.to_thread(_ffmpeg_convert, wav_path, export_path, target_dur)
+                os.replace(export_path, final_path)
+            except Exception:
+                if export_path.exists():
+                    export_path.unlink()
+                if wav_path.exists():
+                    wav_path.unlink()
+                raise
             artifacts = [
                 Artifact(
                     path=final_path, media_type=_media_type(final_path), duration_s=target_dur

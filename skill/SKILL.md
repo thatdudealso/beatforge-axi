@@ -69,7 +69,7 @@ Unsupported capabilities are structured errors:
 operation: repaint
 status: error
 code: unsupported
-message: fake-generate-only does not support repaint
+message: synth does not support repaint
 ```
 
 ## Engine notes
