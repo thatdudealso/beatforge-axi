@@ -239,24 +239,15 @@ class SynthEngine(MusicEngine):
         self, request: GenerateRequest, context: OperationContext
     ) -> OperationResult:
         target_dur = _validate_duration(request.duration_s)
-        params = _parse_prompt(request.prompt)
-        rng = np.random.default_rng(request.seed)
-        audio = _synthesize(params, target_dur, rng)
-
-        # Always produce a WAV first (lossless working file) - this is real PCM audio
-        wav_path = (
-            _staging_wav_path(request.out, context)
-            if request.out.suffix.lower() != ".wav"
-            else request.out
-        )
-        _write_wav(wav_path, audio)
-
         final_path = request.out
-
         suffix = final_path.suffix.lower()
         if suffix == ".wav":
+            params = _parse_prompt(request.prompt)
+            rng = np.random.default_rng(request.seed)
+            audio = _synthesize(params, target_dur, rng)
+            _write_wav(final_path, audio)
             artifacts = [
-                Artifact(path=wav_path, media_type="audio/wav", duration_s=target_dur),
+                Artifact(path=final_path, media_type="audio/wav", duration_s=target_dur),
             ]
         else:
             if suffix not in _FFMPEG_CODECS:
@@ -265,7 +256,19 @@ class SynthEngine(MusicEngine):
                 )
             if not _has_ffmpeg():
                 raise UnsupportedOperationError(f"FFmpeg is required for {suffix} output")
-            await asyncio.to_thread(_ffmpeg_convert, wav_path, final_path, target_dur)
+            params = _parse_prompt(request.prompt)
+            rng = np.random.default_rng(request.seed)
+            audio = _synthesize(params, target_dur, rng)
+            wav_path = _staging_wav_path(request.out, context)
+            _write_wav(wav_path, audio)
+            try:
+                await asyncio.to_thread(_ffmpeg_convert, wav_path, final_path, target_dur)
+            except Exception:
+                if final_path.exists() and final_path != wav_path:
+                    final_path.unlink()
+                if wav_path.exists():
+                    wav_path.unlink()
+                raise
             artifacts = [
                 Artifact(
                     path=final_path, media_type=_media_type(final_path), duration_s=target_dur

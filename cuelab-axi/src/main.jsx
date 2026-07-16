@@ -109,6 +109,10 @@ function App() {
       if (activeRequestRef.current !== requestId) return;
       try {
         const r = await fetch(`/v1/jobs/${jobId}`);
+        if (!r.ok) {
+          const detail = await r.text().catch(() => "");
+          throw new Error(detail || `HTTP ${r.status}`);
+        }
         const data = await r.json();
         if (activeRequestRef.current !== requestId) return;
         setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
@@ -121,8 +125,14 @@ function App() {
         }
         if (data.status === "error") return;
         if (data.status !== "queued" && data.status !== "running") return;
-      } catch (_) {
-        // keep polling
+      } catch (error) {
+        if (activeRequestRef.current !== requestId) return;
+        setJob(prev => ({
+          ...(prev || {}),
+          status: "error",
+          error: String(error)
+        }));
+        return;
       }
     }
   }

@@ -128,6 +128,8 @@ def test_ffmpeg_convert_reports_structured_conversion_errors(
         stderr: int,
         text: bool,
     ) -> subprocess.CompletedProcess[str]:
+        if cmd[1:] == ["-version"]:
+            return subprocess.CompletedProcess(cmd, 0)
         raise subprocess.CalledProcessError(
             1,
             cmd,
@@ -136,6 +138,9 @@ def test_ffmpeg_convert_reports_structured_conversion_errors(
 
     monkeypatch.setattr(synth_adapter.subprocess, "run", run)
     monkeypatch.setattr("engine.synth.adapter._has_ffmpeg", lambda: True)
+
+    workspace = tmp_path / "workspace"
+    wav_path = workspace / "ffmpeg" / "out.wav"
 
     with pytest.raises(UnsupportedOperationError, match="FFmpeg mp3 export failed"):
         asyncio.run(
@@ -147,6 +152,32 @@ def test_ffmpeg_convert_reports_structured_conversion_errors(
                     seed=123,
                 ),
                 OperationContext(job_id="ffmpeg", workspace=tmp_path / "workspace"),
+            )
+        )
+
+    assert not wav_path.exists()
+
+
+def test_non_wav_generation_rejects_unsupported_suffix_before_allocating_audio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def synthesize(
+        params: dict[str, float], duration_s: float, rng: np.random.Generator
+    ) -> np.ndarray:
+        raise AssertionError("synthesis should not start for unsupported output")
+
+    monkeypatch.setattr("engine.synth.adapter._synthesize", synthesize)
+
+    with pytest.raises(UnsupportedOperationError, match="synth does not support"):
+        asyncio.run(
+            SynthEngine().generate(
+                GenerateRequest(
+                    prompt="warm lofi",
+                    duration_s=0.1,
+                    out=tmp_path / "out.aac",
+                    seed=123,
+                ),
+                OperationContext(job_id="unsupported", workspace=tmp_path / "workspace"),
             )
         )
 
