@@ -1,12 +1,11 @@
 # CueLab-axi
 
-CueLab-axi is the planned human interface for BeatForge. It will be a local web
-app styled as a turntable/deck and backed by the same BeatForge operations that
+CueLab-axi is the local human interface for BeatForge. It is a local web app
+styled as a turntable/deck and backed by the same BeatForge operations that
 agents use through `beatforge-axi`.
 
-The UI is not scaffolded yet. This README defines the intended product surface,
-integration boundary, and contribution expectations before implementation
-begins.
+The UI scaffold exists. This README defines the intended product surface,
+integration boundary, and contribution expectations for the deck experience.
 
 ## Product shape
 
@@ -51,7 +50,7 @@ Easy generation:
 1. Choose an engine or keep the configured default.
 2. Enter a prompt and duration.
 3. Generate a take.
-4. Preview, keep, retry, or export MP3.
+4. Preview, keep, retry, or export MP3/WAV.
 
 Advanced editing:
 
@@ -60,7 +59,7 @@ Advanced editing:
 3. Repaint the section when the engine supports it.
 4. Adjust loop points and crossfade boundaries.
 5. Split stems or remix when available.
-6. Export the final MP3 and operation metadata.
+6. Export the final audio file and operation metadata.
 
 ## Design principles
 
@@ -92,18 +91,20 @@ from the local API.
 
 CueLab changes should include:
 
-- Playwright coverage for easy generation with the fake engine;
+- Playwright coverage for easy generation with the real synth engine;
 - capability-gating tests for repaint, remix, stems, and analysis;
 - cancellation and progress behavior;
 - export flow coverage;
 - desktop and mobile screenshots reviewed for overlap, clipping, blank canvas
   states, and text overflow.
 
-Hardware model inference is not required for ordinary UI CI. The fake engine
-should exercise the same API contracts.
+Hardware model inference is not required for ordinary UI CI. The real synth
+engine should exercise the same API contracts, while fake remains confined to
+contract tests.
 
 ## Current status
 
 CueLab has a React/Vite scaffold that targets the local BeatForge `/v1` API
-boundary. The first production pass still needs API-client hardening, job
-progress streaming, Playwright coverage, and browser screenshot review.
+boundary. The current pass covers real generate/play/export behavior. Remaining
+work is API-client hardening, job progress streaming, Playwright coverage, and
+browser screenshot review.

@@ -2,9 +2,9 @@
 
 ## Current Status
 
-Active. BeatForge has a merged Phase 0 through Phase 4 scaffold, but it is not a complete music-generation product yet. The current implementation is suitable for contract validation, fake-engine CLI flows, adapter readiness gates, and CueLab/API integration development.
+Active. BeatForge has a merged Phase 0 through Phase 4 scaffold, but it is not a complete music-generation product yet. The current implementation is suitable for contract validation, synth CLI flows, adapter readiness gates, and CueLab/API integration development.
 
-It is not complete until real local engine execution, artifact serving, FFmpeg post-processing, MP3 playback/export, and hardware validation are implemented and verified.
+It is not complete until hardware validation, production job progress, and catalog submission are implemented and verified.
 
 ## Source of Truth
 
@@ -28,10 +28,6 @@ It is not complete until real local engine execution, artifact serving, FFmpeg p
 
 ## Not Complete Yet
 
-- Real job execution is not wired through the `/v1/jobs/{operation}` API.
-- Generated artifacts are not served by URL.
-- CueLab cannot play a generated artifact yet because the API does not return playable artifact URLs.
-- FFmpeg normalize, duration trim, loop-boundary processing, and MP3 export pipeline are not implemented.
 - Hardware-backed inference was not run for ACE-Step, YuE, or MusicGen.
 - `--full` metadata expansion and production job progress/SSE are not implemented.
 - The AXI catalog submission is not prepared.
@@ -47,7 +43,7 @@ It is not complete until real local engine execution, artifact serving, FFmpeg p
 ## Known Risks
 
 - Documentation can overstate completion if it does not distinguish scaffolding from playable generated music.
-- The current local API queues jobs but does not execute them.
+- The current local API runs jobs locally but still does not stream SSE progress.
 - Hardware and model-weight requirements can be substantial and are not covered by ordinary CI.
 - The current adapters protect readiness and provenance, but real runtime behavior still needs machine-specific validation.
 

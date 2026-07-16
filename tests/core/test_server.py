@@ -206,6 +206,63 @@ def test_artifact_endpoint_serves_registered_media_type(
         thread.join(timeout=5)
 
 
+def test_artifact_endpoint_streams_large_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _LargeRegistry:
+        def for_operation(self, engine_name: str, operation: Operation) -> object:
+            return _LargeEngine()
+
+    class _LargeEngine:
+        async def generate(
+            self, request: GenerateRequest, context: OperationContext
+        ) -> OperationResult:
+            request.out.parent.mkdir(parents=True, exist_ok=True)
+            request.out.write_bytes(b"a" * 262144)
+            return OperationResult(
+                operation=Operation.GENERATE,
+                artifacts=[
+                    Artifact(path=request.out, media_type="audio/wav", duration_s=1.0),
+                ],
+            )
+
+    workspace = tmp_path / "server-workspace"
+    monkeypatch.setattr(server_module, "_WORKSPACE", workspace)
+    monkeypatch.setattr(server_module, "_JOBS", {})
+    monkeypatch.setattr(server_module, "_ARTIFACTS", {})
+    monkeypatch.setattr(server_module, "_REGISTRY", _LargeRegistry())
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server_module.BeatForgeHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        accepted = _post_json(
+            f"{base_url}/v1/jobs/generate",
+            {
+                "engine": "synth",
+                "prompt": "warm lofi",
+                "duration_s": 1,
+                "out": str(tmp_path / "large.wav"),
+            },
+        )
+        job = _wait_for_job(base_url, accepted["job_id"])
+
+        assert job["status"] == "done", job
+        with urllib.request.urlopen(
+            f"{base_url}{job['artifacts'][0]['url']}", timeout=5
+        ) as response:
+            body = response.read()
+            assert response.status == HTTPStatus.OK
+            assert response.headers["content-type"] == "audio/wav"
+            assert int(response.headers["content-length"]) == len(body)
+            assert len(body) == 262144
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
 def test_generate_job_rejects_synth_duration_limit_before_queueing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

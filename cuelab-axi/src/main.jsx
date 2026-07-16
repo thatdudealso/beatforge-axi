@@ -33,7 +33,7 @@ const engineCapabilities = {
 };
 const paths = {
   input_file: "/tmp/beatforge-cuelab/source.mp3",
-  out: "/tmp/beatforge-cuelab/take.mp3",
+  out: "/tmp/beatforge-cuelab/take.wav",
   out_dir: "/tmp/beatforge-cuelab/stems"
 };
 
@@ -87,7 +87,7 @@ function App() {
 
       // Poll for completion (real execution on server)
       if (jid) {
-        pollJob(jid, operation, requestId);
+        pollJob(jid, requestId);
       } else {
         setJob({
           operation,
@@ -103,9 +103,8 @@ function App() {
     }
   }
 
-  async function pollJob(jobId, op, requestId) {
-    const pollAttempts = 60; // ~30s
-    for (let i = 0; i < pollAttempts; i++) {
+  async function pollJob(jobId, requestId) {
+    while (activeRequestRef.current === requestId) {
       await new Promise(r => setTimeout(r, 500));
       if (activeRequestRef.current !== requestId) return;
       try {
@@ -113,24 +112,19 @@ function App() {
         const data = await r.json();
         if (activeRequestRef.current !== requestId) return;
         setJob(prev => ({ ...(prev || {}), status: data.status, result: data.result || data, payload: data }));
-        if (data.status === "done" && data.artifacts && data.artifacts.length > 0) {
-          const first = data.artifacts[0];
-          setAudioArtifact(first);
+        if (data.status === "done") {
+          if (data.artifacts && data.artifacts.length > 0) {
+            const first = data.artifacts[0];
+            setAudioArtifact(first);
+          }
           return;
         }
         if (data.status === "error") return;
+        if (data.status !== "queued" && data.status !== "running") return;
       } catch (_) {
         // keep polling
       }
     }
-    if (activeRequestRef.current !== requestId) return;
-    setJob(prev => ({
-      ...(prev || {}),
-      operation: op,
-      status: "timeout",
-      error: "job_poll_timeout",
-      job_id: jobId
-    }));
   }
 
   function playAudio() {
@@ -143,16 +137,30 @@ function App() {
 
   async function exportAudio() {
     if (!audioUrl) return;
-    const resp = await fetch(audioUrl);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = audioArtifact?.filename || "beatforge-audio";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const resp = await fetch(audioUrl);
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        throw new Error(detail || `HTTP ${resp.status}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = audioArtifact?.filename || "beatforge-audio";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setJob(prev => ({
+        ...(prev || {}),
+        operation: "export",
+        route: "local",
+        status: "error",
+        error: String(error)
+      }));
+    }
   }
 
   return (
