@@ -104,6 +104,6 @@ should exercise the same API contracts.
 
 ## Current status
 
-CueLab is in the planning stage. The operation manifest already names the UI
-controls and routes that CueLab must implement. The React app, local API server,
-and API client will be added after the BeatForge CLI and job runtime land.
+CueLab has a React/Vite scaffold that targets the local BeatForge `/v1` API
+boundary. The first production pass still needs API-client hardening, job
+progress streaming, Playwright coverage, and browser screenshot review.

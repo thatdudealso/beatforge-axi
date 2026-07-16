@@ -8,9 +8,10 @@ local BeatForge runtime. The goal is one music system with two front doors:
 terse, scriptable commands for agents and a visual deck for people.
 
 The project is in active construction. Phase 0 established the engine contract,
-operation manifest, contribution rules, CI, and architecture. Phase 1 engine
-adapter spikes are green as pull requests and cover ACE-Step 1.5, YuE, and
-AudioCraft MusicGen. The production CLI and CueLab UI are still upcoming.
+operation manifest, contribution rules, CI, and architecture. Phase 1 added
+ACE-Step 1.5, YuE, and AudioCraft MusicGen adapters behind the shared contract.
+Phase 2 adds the first CLI and loopback API surface. CueLab now has a React
+scaffold that targets that API boundary.
 
 ## What this project is
 
@@ -48,9 +49,13 @@ Implemented on `main`:
 - Operation manifest tying CLI commands, `/v1` routes, UI controls, and required
   capabilities together.
 - Fake engine and contract tests.
+- AXI CLI command surface for generate, repaint, remix, stems, analyze, and
+  serve.
+- Loopback `/v1/manifest` and `/v1/jobs/{operation}` server boundary.
+- CueLab React/Vite scaffold.
 - Open-source project files, issue templates, PR template, and CI.
 
-Green Phase 1 adapter PRs:
+Phase 1 adapters:
 
 - MusicGen adapter: generate-only, inactive until a permissively licensed local
   checkpoint is explicitly configured and verified.
@@ -61,10 +66,9 @@ Green Phase 1 adapter PRs:
 
 Not implemented yet:
 
-- `beatforge-axi` production CLI commands.
-- Local FastAPI job server and SSE progress.
 - FFmpeg MP3 export pipeline.
-- CueLab React UI.
+- Real long-running job execution and SSE progress.
+- Hardware-backed inference validation on local model weights.
 
 See [docs/architecture.md](docs/architecture.md) for the accepted design and
 [docs/testing.md](docs/testing.md) for the validation strategy. Phase 1 adapter
@@ -89,7 +93,7 @@ engines have different strengths.
 
 ## Target CLI
 
-Phase 2 will implement this command surface:
+The current CLI implements this command surface with the configured engine:
 
 ```sh
 beatforge-axi generate --prompt "dusty lo-fi beat with warm Rhodes" --duration 60 --out track.mp3
@@ -102,8 +106,9 @@ beatforge-axi analyze --file track.mp3
 Default stdout will be TOON-formatted and terse. Progress and diagnostics belong
 on stderr. `--full` will expand metadata for humans and debugging.
 
-Current `main` intentionally exits with a placeholder until the Phase 2 CLI is
-built.
+The default `fake` engine is deterministic and intended for CI, UI development,
+and agent workflow tests. Hardware engines require their documented local
+checkpoints and readiness gates.
 
 ## Engine policy
 

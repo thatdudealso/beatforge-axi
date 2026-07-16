@@ -38,7 +38,8 @@ uv run ruff check .
 uv run basedpyright
 ```
 
-The CueLab command set will be added with its scaffold.
+CueLab currently has a React/Vite scaffold. Its Playwright suite will be added
+with the first browser-backed workflow.
 
 ## Hardware suites
 
