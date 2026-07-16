@@ -15,10 +15,6 @@ def test_manifest_payload_exposes_every_operation_route() -> None:
         "ui_control": "Prompt deck",
         "capability": "generate",
     }
-    assert payload["engines"]["fake"]["capabilities"] == [
-        "analyze",
+    assert payload["engines"]["synth"]["capabilities"] == [
         "generate",
-        "remix",
-        "repaint",
-        "stems",
     ]

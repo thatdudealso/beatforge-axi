@@ -17,7 +17,7 @@ stack.
 
 ### CLI end-to-end tests
 
-Tests spawn the installed `beatforge-axi` executable in a temporary working directory with the deterministic fake engine. They assert exit codes, stdout TOON shape, clean stderr on completion, progress on stderr while running, collision behavior, and output artifacts.
+Tests spawn the installed `beatforge-axi` executable in a temporary working directory with the real local synth engine (the only runtime engine in the finished state). They assert exit codes, stdout TOON shape, clean stderr on completion, progress on stderr while running, collision behavior, and output artifacts that contain real PCM audio data.
 
 Unknown flags and missing required values must fail before an engine is loaded. Unsupported capabilities must return a stable error and actionable help.
 
@@ -27,7 +27,7 @@ Generated fixtures pass through the real FFmpeg boundary. Tests decode the MP3, 
 
 ### API and CueLab tests
 
-The fake engine runs behind the real local HTTP server. Playwright covers easy generation, repaint selection, remix controls, stem mixing, analysis, cancellation, and export. Desktop and mobile screenshots are inspected for overlap, clipping, blank canvases, and incorrect control gating.
+The real synth engine (local PCM synthesis) runs behind the HTTP server. The server returns real artifact URLs at `/v1/artifacts/{token}`. CueLab polls jobs, receives playable URLs, and supports Web Audio playback + export download. Desktop and mobile manual verification plus future Playwright cover generate → play → export.
 
 ## Test commands
 
