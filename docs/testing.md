@@ -23,7 +23,10 @@ Unknown flags and missing required values must fail before an engine is loaded. 
 
 ### Audio tests
 
-Generated fixtures pass through the real FFmpeg boundary. Tests decode the MP3, verify requested duration within one frame, inspect loop edges, and assert that output is non-silent and finite. Hardware engines are not required in ordinary CI.
+Generated fixtures pass through the real FFmpeg boundary (`audio.ffmpeg`). Tests decode
+the MP3, verify requested duration within tolerance, and assert that output is non-silent
+and finite. CI installs `ffmpeg`. Hardware engines are not required in ordinary CI; use
+`--engine synth` for playable MP3 without weights.
 
 ### API and CueLab tests
 

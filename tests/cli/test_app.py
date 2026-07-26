@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
+from audio.ffmpeg import probe_audio
 from cli.app import app
 
 runner = CliRunner()
@@ -123,3 +125,67 @@ def test_analyze_returns_toon_metadata(tmp_path: Path) -> None:
         "  bpm: 90",
         "  key: C minor",
     ]
+
+
+def test_synth_generate_returns_ok_and_playable_mp3(tmp_path: Path) -> None:
+    out = tmp_path / "auraflow-bf-synth.mp3"
+
+    result = runner.invoke(
+        app,
+        [
+            "--engine",
+            "synth",
+            "generate",
+            "--prompt",
+            "soft focus drone",
+            "--duration",
+            "1.0",
+            "--out",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.stderr == ""
+    assert result.stdout.splitlines() == [
+        "operation: generate",
+        "status: ok",
+        "engine: synth",
+        "artifacts[1]: path,media_type,duration_s",
+        f"  {out},audio/mpeg,1.0",
+    ]
+    probe = probe_audio(out)
+    assert abs(probe.duration_s - 1.0) < 0.12
+    assert probe.peak_amplitude > 0.01
+    assert probe.finite
+
+
+def test_acestep_generate_fails_closed_when_unconfigured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("BEATFORGE_ACESTEP_PROJECT_ROOT", raising=False)
+    out = tmp_path / "auraflow-bf-daily.mp3"
+
+    result = runner.invoke(
+        app,
+        [
+            "--engine",
+            "acestep",
+            "generate",
+            "--prompt",
+            "dusty lo-fi beat with warm Rhodes",
+            "--duration",
+            "2",
+            "--out",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert not out.exists()
+    lines = result.stdout.splitlines()
+    assert lines[0] == "operation: generate"
+    assert lines[1] == "status: error"
+    assert lines[2] == "code: engine_unavailable"
+    assert lines[3].startswith("message: ")
+    assert "acestep" in lines[3].lower()

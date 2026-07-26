@@ -22,6 +22,9 @@ It is not complete until real local engine execution, artifact serving, FFmpeg p
 - CLI success and error output is TOON-shaped.
 - Unknown engines, unsupported capabilities, and request validation errors return structured errors.
 - A deterministic fake engine writes placeholder artifacts for test and UI development flows.
+- The `synth` engine always generates a real playable MP3 through the shared FFmpeg helper.
+- The `acestep` engine is registered in the CLI runtime and fails closed with TOON
+  `engine_unavailable` until `BEATFORGE_ACESTEP_PROJECT_ROOT` points at a ready MIT bundle.
 - The loopback API exposes `/v1/manifest` and accepts `/v1/jobs/{operation}` only after engine, capability, and request-schema validation.
 - Phase 1 adapters for ACE-Step, MusicGen, and YuE are present behind readiness and provenance gates.
 - No proprietary music service is integrated.
@@ -31,7 +34,7 @@ It is not complete until real local engine execution, artifact serving, FFmpeg p
 - Real job execution is not wired through the `/v1/jobs/{operation}` API.
 - Generated artifacts are not served by URL.
 - CueLab cannot play a generated artifact yet because the API does not return playable artifact URLs.
-- FFmpeg normalize, duration trim, loop-boundary processing, and MP3 export pipeline are not implemented.
+- FFmpeg normalize, duration trim, and loop-boundary processing are not implemented (encode/probe exists).
 - Hardware-backed inference was not run for ACE-Step, YuE, or MusicGen.
 - `--full` metadata expansion and production job progress/SSE are not implemented.
 - The AXI catalog submission is not prepared.
@@ -42,6 +45,7 @@ It is not complete until real local engine execution, artifact serving, FFmpeg p
 - Keep MusicGen inactive unless an MIT or Apache-2.0 compatible checkpoint is explicitly configured and verified.
 - Use ACE-Step 1.5 as the default-engine candidate, not as a verified fully running default until local weights and runtime validation are complete.
 - Treat the fake engine as a CI and UI development tool, not as real music generation.
+- Use `--engine synth` for orchestrator plumbing that needs audible MP3 without weights.
 - Reject Suno and all proprietary music services completely.
 
 ## Known Risks

@@ -66,9 +66,10 @@ Phase 1 adapters:
 
 Not implemented yet:
 
-- FFmpeg MP3 export pipeline.
+- Full FFmpeg normalize / trim / loop-boundary post-processing pipeline
+  (`synth` already encodes real MP3; AceStep can emit native MP3 when ready).
 - Real long-running job execution and SSE progress.
-- Hardware-backed inference validation on local model weights.
+- Hardware-backed ACE-Step inference validation on local model weights.
 
 See [docs/architecture.md](docs/architecture.md) for the accepted design and
 [docs/testing.md](docs/testing.md) for the validation strategy. Phase 1 adapter
@@ -107,19 +108,21 @@ Default stdout will be TOON-formatted and terse. Progress and diagnostics belong
 on stderr. `--full` will expand metadata for humans and debugging.
 
 The default `fake` engine is deterministic and intended for CI, UI development,
-and agent workflow tests. Hardware engines require their documented local
-checkpoints and readiness gates.
+and agent workflow tests. It does **not** write playable MP3. Use `--engine synth`
+for always-on audible MP3 plumbing, or `--engine acestep` when the MIT turbo
+checkpoint is installed. See [docs/setup-mac-daily.md](docs/setup-mac-daily.md).
 
 ## Engine policy
 
 Engines are interchangeable through the shared adapter contract and capability
 metadata. Selection must be a configuration decision, not a rewrite.
 
-| Engine | Phase 1 role | Strength | Important caveat |
-| --- | --- | --- | --- |
-| ACE-Step 1.5 | Default candidate | Local generation, repaint/remix direction, permissive provenance | Heavy runtime and verified weights are required for real inference |
-| YuE | Optional vocals adapter | Full-song vocals and reference-audio style transfer | CUDA-first and substantially heavier |
-| MusicGen | Optional generate-only adapter | Mature text-to-music baseline | Official Meta weights are CC-BY-NC and are rejected by project policy |
+| Engine | CLI name | Phase 1 role | Strength | Important caveat |
+| --- | --- | --- | --- | --- |
+| Synth | `synth` | Always-ready plumbing | Real MP3 via FFmpeg, no weights | Simple drone/tone, not generative music |
+| ACE-Step 1.5 | `acestep` | Default candidate | Local generation, permissive MIT provenance | Requires pinned checkout + verified turbo weights |
+| YuE | `yue` | Optional vocals adapter | Full-song vocals and reference-audio style transfer | CUDA-first and substantially heavier; not CLI-wired until configured |
+| MusicGen | `musicgen` | Optional generate-only adapter | Mature text-to-music baseline | Official Meta weights are CC-BY-NC and are rejected by project policy |
 
 Activation must fail closed when a model, checkpoint, digest, license, device,
 or dependency is not verified.
@@ -130,14 +133,26 @@ Requirements:
 
 - Python 3.11 or 3.12
 - `uv`
-- FFmpeg for future MP3 integration tests and exports
-- Node.js 22 and pnpm for future CueLab work
+- `ffmpeg` / `ffprobe` on `PATH` (required for `synth` MP3 export and audio tests)
+- Node.js 22 and pnpm for CueLab work
 
 Install development dependencies:
 
 ```sh
 uv sync --extra dev
 ```
+
+AuraFlow / orchestrator smoke (playable MP3):
+
+```sh
+uv run beatforge-axi --engine synth generate \
+  --prompt "soft focus drone" \
+  --duration 15 \
+  --out /tmp/auraflow-bf-synth.mp3
+```
+
+Daily Mac ACE-Step setup (env, checkpoint, smoke) is documented in
+[docs/setup-mac-daily.md](docs/setup-mac-daily.md).
 
 Run validation:
 
@@ -151,6 +166,7 @@ uv run pytest
 ## Repository layout
 
 ```text
+audio/           Shared FFmpeg encode/probe helpers
 engine/          Pluggable engine contract and adapters
 cli/             AXI command entry point
 core/            Operation manifest and shared orchestration surface

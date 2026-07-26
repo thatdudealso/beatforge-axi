@@ -68,6 +68,21 @@ Readiness issues use stable codes and actionable messages. Native imports occur 
 the readiness gate. Native load and generation failures are translated to stable shared
 engine errors without exposing upstream exception text.
 
+## CLI / environment activation
+
+The CLI registers `acestep` through `runtime_registry()`. Set:
+
+```sh
+export BEATFORGE_ACESTEP_PROJECT_ROOT=/path/to/ACE-Step-1.5   # pinned commit required
+export BEATFORGE_ACESTEP_DEVICE=mps                           # optional; default auto
+```
+
+`config_from_environ()` fills the official MIT checkpoint identity, provenance URL, and
+weight digest allowlist when the project root is set. Without
+`BEATFORGE_ACESTEP_PROJECT_ROOT`, the engine stays registered but activation fails closed
+with TOON `engine_unavailable`. Daily Mac steps and smoke commands live in
+[../setup-mac-daily.md](../setup-mac-daily.md).
+
 ## Adapter configuration surface
 
 `AceStepConfig` is adapter-local. `project_root` points at the pinned ACE-Step git checkout,
