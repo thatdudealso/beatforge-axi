@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en" data-theme="luxury">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BeatForge AuraFlow — MP3 plumbing + UI preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --signal: #ff5a45;
+      --ready: #7de2bd;
+      --deck: #d7ff62;
+      --ink: #f7f3e8;
+      --muted: #aba69c;
+      --panel: #161715;
+      --line: #383a35;
+    }
+    html { background: #0d0e0d; color: var(--ink); }
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; }
+    code, pre, .mono { font-family: "IBM Plex Mono", monospace; }
+    p, li, td, th, code, .badge { overflow-wrap: anywhere; }
+    .shell { width: min(1280px, 100%); margin: 0 auto; padding: 28px 22px 80px; }
+    .mast { border-top: 5px solid var(--signal); border-bottom: 1px solid var(--line); padding: 34px 0 30px; }
+    .kicker { color: var(--signal); font: 600 12px/1.4 "IBM Plex Mono", monospace; text-transform: uppercase; }
+    h1 { max-width: 940px; margin: 12px 0 16px; font-size: clamp(36px, 6vw, 72px); line-height: 1.12; font-weight: 650; }
+    h2 { margin: 0 0 18px; font-size: clamp(24px, 3vw, 36px); line-height: 1.18; }
+    h3 { margin: 0 0 10px; font-size: 18px; }
+    .lede { max-width: 840px; color: var(--muted); font-size: 18px; line-height: 1.55; }
+    .meta-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+    .meta { min-width: 0; padding: 18px 16px 18px 0; border-right: 1px solid var(--line); }
+    .meta + .meta { padding-left: 16px; }
+    .meta:last-child { border-right: 0; }
+    .meta-label { color: var(--muted); font: 500 11px/1.4 "IBM Plex Mono", monospace; text-transform: uppercase; }
+    .meta-value { margin-top: 5px; font-size: 16px; font-weight: 600; }
+    section { padding: 48px 0; border-bottom: 1px solid var(--line); }
+    .section-head { display: grid; grid-template-columns: minmax(0, .34fr) minmax(0, .66fr); gap: 28px; align-items: start; }
+    .section-intro { max-width: 720px; color: var(--muted); line-height: 1.55; }
+    .grid-2, .grid-3 { display: grid; gap: 14px; margin-top: 24px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .module { min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 20px; background: var(--panel); }
+    .module strong, .module .go { color: var(--ready); }
+    .module p, .module li { color: #c7c3ba; line-height: 1.5; }
+    .num { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; margin-bottom: 18px; border: 1px solid var(--signal); border-radius: 50%; color: var(--signal); font: 600 12px/1 "IBM Plex Mono", monospace; }
+    .architecture { margin-top: 26px; padding: 20px; border: 1px solid var(--line); border-radius: 6px; background: #f7f3e8; color: #181916; overflow-x: auto; }
+    .shot-grid { display: grid; gap: 18px; margin-top: 24px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    figure { margin: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #080908; }
+    figure img { display: block; width: 100%; height: auto; }
+    figcaption { padding: 12px 14px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+    pre { margin: 14px 0 0; padding: 16px; background: #080908; border: 1px solid #2c2e2a; border-radius: 5px; color: #dfddd4; font-size: 12px; line-height: 1.6; overflow-x: auto; }
+    .status { display: inline-block; padding: 4px 7px; border: 1px solid currentColor; border-radius: 3px; font: 600 10px/1.2 "IBM Plex Mono", monospace; text-transform: uppercase; white-space: nowrap; }
+    .status.go { color: var(--ready); }
+    .status.hold { color: #e8bd69; }
+    .table-wrap { margin-top: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { width: 100%; min-width: 720px; border-collapse: collapse; background: var(--panel); }
+    th { color: var(--muted); font: 500 11px/1.4 "IBM Plex Mono", monospace; text-align: left; text-transform: uppercase; }
+    th, td { padding: 15px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    td { color: #d5d1c7; line-height: 1.45; }
+    .phase-list { display: grid; gap: 0; margin-top: 24px; border-top: 1px solid var(--line); }
+    .phase { display: grid; grid-template-columns: 90px minmax(0, .7fr) minmax(0, 1.3fr); gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .phase-id { color: var(--signal); font: 600 12px/1.4 "IBM Plex Mono", monospace; }
+    .phase-title { font-weight: 650; }
+    .phase-detail { color: var(--muted); line-height: 1.5; }
+    .question { margin-top: 18px; border: 1px solid var(--line); border-radius: 6px; padding: 20px; background: var(--panel); }
+    .options { display: grid; gap: 10px; margin: 16px 0; }
+    .option { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; color: #d2cec5; }
+    .option input { margin-top: 4px; accent-color: var(--signal); }
+    .queue { border: 0; border-radius: 4px; padding: 11px 15px; background: var(--signal); color: #160d0b; font: 700 12px/1 "IBM Plex Mono", monospace; cursor: pointer; }
+    .queue:hover { filter: brightness(1.08); }
+    a { color: #9ce8cd; text-underline-offset: 3px; }
+    @media (max-width: 820px) {
+      .section-head, .grid-2, .grid-3, .shot-grid { grid-template-columns: 1fr; }
+      .meta-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .phase { grid-template-columns: 65px minmax(0, 1fr); }
+      .phase-detail { grid-column: 2; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="mast">
+      <div class="kicker">AuraFlow review / PR #7 / 2026-07-28</div>
+      <h1>Real MP3 plumbing is live. CueLab is the human deck next.</h1>
+      <p class="lede">BeatForge is a music sibling to <a href="https://github.com/kunchenguid/lavish-axi">lavish-axi</a> — same AXI conventions (TOON stdout, local-first, structured errors), but for audio instead of HTML review. This artifact shows what shipped for AuraFlow orchestrators and what CueLab looks like today.</p>
+    </header>
+
+    <div class="meta-strip" aria-label="Status summary">
+      <div class="meta"><div class="meta-label">Plumbing</div><div class="meta-value"><span class="status go">Shipped</span></div></div>
+      <div class="meta"><div class="meta-label">Synth engine</div><div class="meta-value">Always-ready MP3</div></div>
+      <div class="meta"><div class="meta-label">ACE-Step</div><div class="meta-value">Fail-closed wired</div></div>
+      <div class="meta"><div class="meta-label">CueLab playback</div><div class="meta-value"><span class="status hold">Scaffold</span></div></div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">01 / Flow</div><h2>AuraFlow → BeatForge</h2></div>
+        <p class="section-intro">Orchestrators shell out to <code>beatforge-axi</code>. Success is TOON <code>status: ok</code> plus a playable MP3 on disk. Missing weights or FFmpeg fail closed — no silent fallback to proprietary services or NC weights.</p>
+      </div>
+      <div class="architecture">
+        <div class="mermaid">
+flowchart LR
+  AuraFlow["AuraFlow orchestrator"] -->|"beatforge-axi --engine … generate"| CLI["beatforge-axi CLI"]
+  CLI --> Registry["Engine registry"]
+  Registry --> Synth["synth\nstdlib drone + FFmpeg"]
+  Registry --> AceStep["acestep\nMIT turbo when ready"]
+  Synth --> MP3["out.mp3\naudible"]
+  AceStep --> MP3
+  AceStep -->|"weights missing"| Err["TOON engine_unavailable"]
+  Human["Human reviewer"] --> CueLab["CueLab deck\nwaveform + accept"]
+  CueLab --> API["/v1 loopback API"]
+  API --> Registry
+        </div>
+      </div>
+      <div class="grid-2">
+        <article class="module">
+          <span class="num">A</span>
+          <h3>Plumbing (done)</h3>
+          <pre><code>beatforge-axi --engine synth generate \
+  --prompt "soft focus drone" \
+  --duration 15 \
+  --out /tmp/auraflow-bf-synth.mp3</code></pre>
+          <p>Returns <strong>status: ok</strong> and a real MP3. Requires <code>ffmpeg</code> on PATH.</p>
+        </article>
+        <article class="module">
+          <span class="num">B</span>
+          <h3>Product (when Mac ready)</h3>
+          <pre><code>export BEATFORGE_ACESTEP_PROJECT_ROOT=~/src/ACE-Step-1.5
+beatforge-axi --engine acestep generate \
+  --prompt "dusty lo-fi beat with warm Rhodes" \
+  --duration 60 \
+  --out /tmp/auraflow-bf-daily.mp3</code></pre>
+          <p>MIT turbo bundle + pinned checkout required. See <code>docs/setup-mac-daily.md</code>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">02 / UI</div><h2>CueLab deck (current scaffold)</h2></div>
+        <p class="section-intro">CueLab is BeatForge’s Lavish-analogue human surface: waveform platter, generate controls, and (eventually) accept/reject on returned artifacts. Screenshots below are from the live React/Vite app running locally — not mocks.</p>
+      </div>
+      <div class="shot-grid">
+        <figure>
+          <img src="cuelab-easy-desktop.png" alt="CueLab easy mode with turntable platter, prompt deck, and generate button">
+          <figcaption><strong>Easy mode</strong> — engine selector, prompt, duration, preset, Generate. Job status panel at bottom. Waveform is decorative until artifact URLs land.</figcaption>
+        </figure>
+        <figure>
+          <img src="cuelab-advanced-desktop.png" alt="CueLab advanced mode with repaint, remix, stems, analyze, loop, and export controls">
+          <figcaption><strong>Advanced mode</strong> — Repaint, Remix, Stems, Analyze, Loop, Export. Capability-gated from engine metadata (same manifest as CLI).</figcaption>
+        </figure>
+      </div>
+      <div class="grid-3">
+        <article class="module"><h3>Working today</h3><ul><li>Deck layout and turntable platter</li><li>Easy / Advanced mode switch</li><li>Engine capability gating</li><li>Generate submits to <code>/v1/jobs/generate</code></li></ul></article>
+        <article class="module"><h3>Not yet</h3><ul><li>Play generated MP3 in browser</li><li>Real waveform from audio bytes</li><li>Accept / reject acceptance board</li><li>Job progress SSE</li></ul></article>
+        <article class="module"><h3>Lavish parity</h3><p>lavish-axi reviews HTML artifacts with annotate + queue feedback. CueLab will review <strong>audio artifacts</strong> with waveform selection and human sign-off — same AXI loop, different medium.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">03 / Engines</div><h2>What AuraFlow can call</h2></div>
+        <p class="section-intro">Engine names are stable CLI flags. Synth unblocks orchestrators immediately; acestep is the generative product path once weights are verified on the daily Mac.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Engine</th><th>CLI flag</th><th>MP3</th><th>Weights</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Synth</td><td class="mono">--engine synth</td><td>FFmpeg encode</td><td>None</td><td><span class="status go">Ready</span></td></tr>
+            <tr><td>ACE-Step 1.5</td><td class="mono">--engine acestep</td><td>Native MP3</td><td>MIT turbo @ pinned revision</td><td><span class="status hold">Env + checkpoint</span></td></tr>
+            <tr><td>Fake</td><td class="mono">--engine fake</td><td>Placeholder bytes</td><td>None</td><td>CI / UI dev only</td></tr>
+            <tr><td>MusicGen</td><td class="mono">--engine musicgen</td><td>—</td><td>Meta NC rejected</td><td><span class="status hold">Gated</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">04 / Roadmap</div><h2>Next surfaces</h2></div>
+        <p class="section-intro">Phase 0 architecture (linked artifact) defines the full modular monolith. This PR closes the AuraFlow generate contract; the acceptance board lives in CueLab follow-on work.</p>
+      </div>
+      <div class="phase-list">
+        <div class="phase"><div class="phase-id">NOW</div><div class="phase-title">AuraFlow generate</div><div class="phase-detail">Synth MP3 always works. AceStep registered fail-closed. Mac setup documented. PR #7.</div></div>
+        <div class="phase"><div class="phase-id">NEXT</div><div class="phase-title">CueLab playback</div><div class="phase-detail">Serve artifact URLs from API, Web Audio playback, waveform from decoded MP3, desktop/mobile Playwright.</div></div>
+        <div class="phase"><div class="phase-id">THEN</div><div class="phase-title">Acceptance board</div><div class="phase-detail">Human approve/reject on generated takes (Lavish-style feedback loop for music). Queue prompts back to agent via TOON/job metadata.</div></div>
+        <div class="phase"><div class="phase-id">REF</div><div class="phase-title">Phase 0 plan</div><div class="phase-detail">Full architecture, engine gate, manifest symmetry, and build sequence — open <code>phase-0-architecture.html</code> in Lavish for the original review surface.</div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">05 / Input</div><h2>What should we prioritize next?</h2></div>
+        <p class="section-intro">Queue your choice back to the agent through Lavish. This steers the next implementation slice after you’ve seen the UI and plans.</p>
+      </div>
+      <form class="question" data-lavish-question="next-slice" onsubmit="event.preventDefault(); const value = new FormData(event.currentTarget).get('next-slice'); if (value) window.lavish.queuePrompt('Prioritize this BeatForge/CueLab slice next: ' + value, { tag: 'choice', text: 'Next slice: ' + value, element: event.currentTarget, queueKey: 'next-slice' });">
+        <h3>Pick the next build target</h3>
+        <div class="options">
+          <label class="option"><input type="radio" name="next-slice" value="CueLab MP3 playback + real waveform from synth artifacts" required> CueLab MP3 playback + real waveform from synth artifacts</label>
+          <label class="option"><input type="radio" name="next-slice" value="Acceptance board (approve/reject takes like Lavish HTML review)"> Acceptance board (approve/reject takes like Lavish HTML review)</label>
+          <label class="option"><input type="radio" name="next-slice" value="Mac ACE-Step daily smoke + hardware validation"> Mac ACE-Step daily smoke + hardware validation</label>
+          <label class="option"><input type="radio" name="next-slice" value="Keep plumbing only — AuraFlow integration is enough for now"> Keep plumbing only — AuraFlow integration is enough for now</label>
+        </div>
+        <button class="queue" type="submit">Queue choice for agent</button>
+      </form>
+    </section>
+  </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "strict" });
+  </script>
+</body>
+</html>
