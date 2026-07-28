@@ -52,17 +52,51 @@ on `PATH`.
 
 ## Engine: `acestep` (product path, MIT)
 
-Engine name: **`acestep`**.
+Engine name: **`acestep`**. Already registered in `runtime_registry()`.
 
-### Checkpoint / checkout
+### One-shot setup script
+
+```sh
+# clones pinned commit, uv sync, downloads verified revision into checkpoints/
+./scripts/setup-acestep.sh "$HOME/src/ACE-Step-1.5"
+```
+
+Then install BeatForge into that ACE-Step environment (keeps torch/MLX with upstream):
+
+```sh
+cd "$HOME/src/ACE-Step-1.5"
+uv pip install -e /path/to/beatforge-axi
+```
+
+BeatForge's console entrypoint demotes ACE-Step's top-level `cli.py` so
+`beatforge-axi` keeps resolving BeatForge's `cli` package.
+
+### Manual checkpoint / checkout
 
 1. Clone ACE-Step 1.5 and check out the pinned commit
    `6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0`.
-2. Install that checkout with `uv sync --frozen` so the `acestep` package is
-   importable in the environment that runs `beatforge-axi`.
-3. Install the official turbo bundle under `<checkout>/checkpoints/` for revision
-   `19671f406d603126926c1b7e2adc169acbcade22` (files and digests are listed in
-   [spikes/acestep.md](spikes/acestep.md)).
+2. Install that checkout with `uv sync` / `uv sync --frozen`.
+3. Download the official turbo bundle under `<checkout>/checkpoints/` for revision
+   `19671f406d603126926c1b7e2adc169acbcade22`:
+
+```sh
+hf download ACE-Step/Ace-Step1.5 \
+  --revision 19671f406d603126926c1b7e2adc169acbcade22 \
+  --local-dir "$HOME/src/ACE-Step-1.5/checkpoints"
+```
+
+Required files and digests are listed in [spikes/acestep.md](spikes/acestep.md).
+
+4. Make the `acestep` package importable without shadowing BeatForge's `cli`
+   package. BeatForge appends `BEATFORGE_ACESTEP_PROJECT_ROOT` onto `sys.path`
+   when configured. Prefer installing BeatForge into the ACE-Step venv (heavy
+   stack stays isolated) rather than editable-installing ACE-Step into BeatForge:
+
+```sh
+cd "$HOME/src/ACE-Step-1.5"
+uv pip install -e /path/to/beatforge-axi
+# beatforge-axi entrypoint demotes ACE-Step's cli.py so imports stay correct
+```
 
 ### Environment
 
@@ -70,6 +104,10 @@ Engine name: **`acestep`**.
 | --- | --- | --- |
 | `BEATFORGE_ACESTEP_PROJECT_ROOT` | yes | Absolute path to the pinned ACE-Step-1.5 checkout |
 | `BEATFORGE_ACESTEP_DEVICE` | no | `auto` (default), `cpu`, `cuda`, `mps`, or `xpu` |
+| `BEATFORGE_ACESTEP_USE_MLX_DIT` | no | Default on for `auto`/`mps`; set `0` on Linux CPU/CUDA |
+| `BEATFORGE_ACESTEP_OFFLOAD_TO_CPU` | no | Pass-through to upstream for low-memory hosts |
+| `BEATFORGE_ACESTEP_OFFLOAD_DIT_TO_CPU` | no | Pass-through to upstream DiT offload |
+| `ACESTEP_INIT_LLM` | no | Upstream env; use `false` for DiT-only / low RAM |
 
 When `BEATFORGE_ACESTEP_PROJECT_ROOT` is set, BeatForge fills the official MIT
 checkpoint identity, provenance URL, and weight digest allowlist. Activation
@@ -78,9 +116,14 @@ pinned checkout, importable `acestep` package).
 
 ```sh
 export BEATFORGE_ACESTEP_PROJECT_ROOT="$HOME/src/ACE-Step-1.5"
-export BEATFORGE_ACESTEP_DEVICE=mps   # Apple Silicon example
+export BEATFORGE_ACESTEP_DEVICE=mps   # Apple Silicon daily Mac
+# Linux CPU (works; frees DiT before VAE decode for ≤16GB hosts):
+# export BEATFORGE_ACESTEP_DEVICE=cpu
+# export BEATFORGE_ACESTEP_USE_MLX_DIT=0
+# export BEATFORGE_ACESTEP_OFFLOAD_TO_CPU=1
+# export ACESTEP_INIT_LLM=false
 
-beatforge-axi --engine acestep generate \
+"$HOME/src/ACE-Step-1.5/.venv/bin/beatforge-axi" --engine acestep generate \
   --prompt "dusty lo-fi beat with warm Rhodes" \
   --duration 60 \
   --out /tmp/auraflow-bf-daily.mp3

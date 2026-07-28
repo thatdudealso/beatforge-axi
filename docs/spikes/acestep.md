@@ -104,15 +104,27 @@ separate verified adapter phase before those capabilities can be declared honest
 Supported generation output suffixes are WAV, FLAC, MP3, Opus, and AAC. Generation is
 serialized per adapter instance because the runtime owns a large mutable accelerator model.
 
-## Apple MPS smoke generation
+## Apple MPS / local smoke generation
 
-Result: not reproduced in this validation environment. No real Apple MPS generation artifact
-was produced or inspected here because the optional `acestep` package was not discoverable
-and the verified checkpoint bundle was not present. Per validation direction, this pass did
-not download ACE-Step weights or require the heavy upstream runtime.
+Pinned checkout `6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0` plus official revision
+`19671f406d603126926c1b7e2adc169acbcade22` were installed under
+`.deps/ACE-Step-1.5` in the cloud agent environment. Readiness reported ready
+after digest verification. CLI generate on CPU (DiT-only, LLM disabled) produced
+a real MPEG ADTS MP3:
 
-The executable evidence for this pass is mocked adapter E2E coverage through `AceStepEngine`.
-That evidence verifies the adapter's public behavior: ready configuration, generate-only
-capabilities, request mapping, copied WAV output, metadata, and stable unsupported repaint
-behavior. It does not prove real ACE-Step runtime execution, real Apple MPS diffusion, model
-load behavior, wall time, memory use, or audio quality.
+```sh
+BEATFORGE_ACESTEP_PROJECT_ROOT=/path/to/ACE-Step-1.5 \
+BEATFORGE_ACESTEP_DEVICE=cpu \
+BEATFORGE_ACESTEP_USE_MLX_DIT=0 \
+BEATFORGE_ACESTEP_OFFLOAD_TO_CPU=1 \
+ACESTEP_INIT_LLM=false \
+/path/to/ACE-Step-1.5/.venv/bin/beatforge-axi --engine acestep generate \
+  --prompt "dusty lo-fi beat with warm Rhodes" \
+  --duration 5 \
+  --out /tmp/auraflow-bf-acestep-smoke.mp3
+# status: ok, engine: acestep, playable audio/mpeg
+```
+
+Daily Mac should use `BEATFORGE_ACESTEP_DEVICE=mps` and the setup script in
+[`../setup-mac-daily.md`](../setup-mac-daily.md) / [`../../scripts/setup-acestep.sh`](../../scripts/setup-acestep.sh).
+Apple MPS wall-clock and quality benchmarks remain separate from this CPU smoke.

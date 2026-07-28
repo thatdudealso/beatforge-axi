@@ -12,6 +12,8 @@ node_modules/
 cuelab-axi/dist/
 playwright-report/
 test-results/
+.playwright-mcp/
+.deps/
 *.mp3
 *.wav
 *.flac

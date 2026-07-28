@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import gc
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from engine.acestep.config import AceStepConfig
+from engine.acestep.path import ensure_project_root_on_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,8 +67,12 @@ class AceStepRuntime:
         self._config_factory: Callable[..., object] | None = None
         self._generate_music: Callable[..., object] | None = None
         self._device: str | None = None
+        self._release_dit_before_decode = False
+        self._config: AceStepConfig | None = None
+        self._needs_reload = False
 
     def load(self, config: AceStepConfig) -> None:
+        ensure_project_root_on_path(config.project_root)
         handler_module = importlib.import_module("acestep.handler")
         inference_module = importlib.import_module("acestep.inference")
         handler_file = handler_module.__file__
@@ -96,8 +102,17 @@ class AceStepRuntime:
             raise RuntimeError(status)
         self._handler = handler
         self._device = handler.device
+        self._config = config
+        self._needs_reload = False
+        # CPU hosts keep DiT resident (~12GB). Free it before VAE decode so
+        # longer clips fit in ≤16GB RAM. MPS/CUDA keep the model warm.
+        self._release_dit_before_decode = config.device == "cpu" or config.offload_to_cpu
 
     def generate(self, request: RuntimeGenerateRequest) -> RuntimeGenerateResult:
+        if self._needs_reload:
+            if self._config is None:
+                raise RuntimeError("ACE-Step runtime has not been loaded")
+            self.load(self._config)
         if (
             self._handler is None
             or self._params_factory is None
@@ -126,16 +141,22 @@ class AceStepRuntime:
             seeds=None if request.seed is None else [request.seed],
             audio_format=request.output_format,
         )
-        native_result = cast(
-            _UpstreamGeneration,
-            self._generate_music(
-                self._handler,
-                None,
-                params,
-                generation_config,
-                save_dir=str(request.output_dir),
-            ),
-        )
+        restore = _install_dit_release_hook(self._handler, enabled=self._release_dit_before_decode)
+        try:
+            native_result = cast(
+                _UpstreamGeneration,
+                self._generate_music(
+                    self._handler,
+                    None,
+                    params,
+                    generation_config,
+                    save_dir=str(request.output_dir),
+                ),
+            )
+        finally:
+            restore()
+            if self._release_dit_before_decode:
+                self._needs_reload = True
         if not native_result.success:
             raise RuntimeError(native_result.error or "ACE-Step returned an unsuccessful result")
         if not native_result.audios:
@@ -154,3 +175,35 @@ class AceStepRuntime:
             duration_s=request.duration_s,
             metadata={"device": self._device, "seed": seed},
         )
+
+
+def _install_dit_release_hook(handler: object, *, enabled: bool) -> Callable[[], None]:
+    """Free the DiT before VAE decode to reclaim multi-GB of CPU RAM."""
+    if not enabled:
+        return lambda: None
+    decode = getattr(handler, "_decode_generate_music_pred_latents", None)
+    if not callable(decode):
+        return lambda: None
+
+    def _release_dit() -> None:
+        for attr in ("model", "text_encoder", "text_encoder_model"):
+            obj = getattr(handler, attr, None)
+            if obj is None:
+                continue
+            setattr(handler, attr, None)
+            del obj
+        gc.collect()
+        release = getattr(handler, "_release_system_memory", None)
+        if callable(release):
+            release()
+
+    def hooked(*args: Any, **kwargs: Any) -> Any:
+        _release_dit()
+        return decode(*args, **kwargs)
+
+    handler._decode_generate_music_pred_latents = hooked  # type: ignore[attr-defined]
+
+    def restore() -> None:
+        handler._decode_generate_music_pred_latents = decode  # type: ignore[attr-defined]
+
+    return restore

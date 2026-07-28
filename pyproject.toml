@@ -24,7 +24,7 @@ dev = [
 ]
 
 [project.scripts]
-beatforge-axi = "cli.app:main"
+beatforge-axi = "core.entrypoint:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["audio", "cli", "core", "engine"]
