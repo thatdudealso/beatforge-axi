@@ -29,7 +29,14 @@ class EngineRegistry:
                 f"{name} model license must be MIT or Apache-2.0, got {descriptor.model_license}"
             )
         if not descriptor.ready:
-            raise EngineUnavailableError(f"{name} is configured but not ready")
+            detail = ""
+            readiness = getattr(engine, "readiness", None)
+            if callable(readiness):
+                report = readiness()
+                summary = getattr(report, "summary", None)
+                if isinstance(summary, str) and summary:
+                    detail = f": {summary}"
+            raise EngineUnavailableError(f"{name} is configured but not ready{detail}")
         return engine
 
     def for_operation(self, name: str, operation: Operation) -> MusicEngine:

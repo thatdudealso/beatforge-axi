@@ -24,10 +24,10 @@ dev = [
 ]
 
 [project.scripts]
-beatforge-axi = "cli.app:main"
+beatforge-axi = "core.entrypoint:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["cli", "core", "engine"]
+packages = ["audio", "cli", "core", "engine"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
@@ -44,4 +44,4 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.basedpyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
-include = ["cli", "core", "engine", "tests"]
+include = ["audio", "cli", "core", "engine", "tests"]

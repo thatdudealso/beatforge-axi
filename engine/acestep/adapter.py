@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from engine.acestep.config import AceStepConfig
+from engine.acestep.path import ensure_project_root_on_path
 from engine.acestep.readiness import ReadinessReport, inspect_readiness
 from engine.acestep.runtime import (
     AceStepRuntime,
@@ -72,6 +73,7 @@ class AceStepEngine:
         )
 
     def readiness(self) -> ReadinessReport:
+        ensure_project_root_on_path(self._config.project_root)
         return inspect_readiness(self._config, dependency_probe=self._dependency_probe)
 
     async def generate(
