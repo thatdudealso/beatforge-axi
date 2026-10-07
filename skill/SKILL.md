@@ -48,7 +48,7 @@ beatforge-axi analyze --file track.mp3
 Select an engine:
 
 ```sh
-beatforge-axi --engine fake generate --prompt "warm loop" --duration 8 --out loop.mp3
+beatforge-axi generate --prompt "warm loop" --duration 8 --out loop.mp3
 ```
 
 ## Output
@@ -58,7 +58,7 @@ Success output is TOON-shaped:
 ```toon
 operation: generate
 status: ok
-engine: fake
+engine: synth
 artifacts[1]: path,media_type,duration_s
   track.mp3,audio/mpeg,60.0
 ```
@@ -69,7 +69,7 @@ Unsupported capabilities are structured errors:
 operation: repaint
 status: error
 code: unsupported
-message: fake-generate-only does not support repaint
+message: synth does not support repaint
 ```
 
 ## Engine notes

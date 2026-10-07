@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from engine.fake import FakeEngine
 from engine.models import CapabilitySet, EngineDescriptor, LicenseId
 from engine.registry import EngineRegistry
+from engine.synth import SynthEngine
 
 
 def engine_descriptors() -> dict[str, EngineDescriptor]:
-    fake = FakeEngine().descriptor
-    fake_generate_only = FakeEngine(
-        name="fake-generate-only", capabilities=CapabilitySet(generate=True)
-    ).descriptor
+    synth = SynthEngine().descriptor
     musicgen = EngineDescriptor(
         name="musicgen",
         model="unconfigured",
@@ -43,16 +40,10 @@ def engine_descriptors() -> dict[str, EngineDescriptor]:
         ready=False,
         capabilities=CapabilitySet(generate=True, remix=True),
     )
-    return {
-        descriptor.name: descriptor
-        for descriptor in (fake, fake_generate_only, musicgen, acestep, yue)
-    }
+    return {descriptor.name: descriptor for descriptor in (synth, musicgen, acestep, yue)}
 
 
 def runtime_registry() -> EngineRegistry:
     registry = EngineRegistry()
-    registry.register(FakeEngine())
-    registry.register(
-        FakeEngine(name="fake-generate-only", capabilities=CapabilitySet(generate=True))
-    )
+    registry.register(SynthEngine())
     return registry
